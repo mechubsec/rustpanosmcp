@@ -6,7 +6,7 @@
 //! (auth requirement/conflict, loopback bind policy, TLS pairing, numeric
 //! host, and allowed-host/allowed-origin shape). mecmcp#495 promoted those
 //! rules into `mecmcp_runtime::cli_validate`, so [`validate`] now delegates
-//! to it via [`shared_validate`] instead of re-implementing them.
+//! to it via `shared_validate` instead of re-implementing them.
 //!
 //! What remains here is the subset `mecmcp_runtime::cli::Cli` cannot check
 //! because the fields don't exist on the shared surface yet: absolute paths
@@ -207,13 +207,17 @@ mod tests {
         ];
         assert!(matches!(
             validate(&parse(&base)),
-            Err(CliRefusal::Shared(SharedRefusal::AllowedHostRequired { .. }))
+            Err(CliRefusal::Shared(
+                SharedRefusal::AllowedHostRequired { .. }
+            ))
         ));
         let mut with_host = base.to_vec();
         with_host.extend(["--allowed-host", "mcp.example.test"]);
         assert!(matches!(
             validate(&parse(&with_host)),
-            Err(CliRefusal::Shared(SharedRefusal::AllowedOriginRequired { .. }))
+            Err(CliRefusal::Shared(
+                SharedRefusal::AllowedOriginRequired { .. }
+            ))
         ));
         with_host.extend(["--allowed-origin", "https://client.example.test"]);
         assert!(validate(&parse(&with_host)).is_ok());
@@ -267,7 +271,9 @@ mod tests {
                 "--allowed-origin",
                 "ftp://client.example.test"
             ])),
-            Err(CliRefusal::Shared(SharedRefusal::InvalidAllowedOrigin { .. }))
+            Err(CliRefusal::Shared(
+                SharedRefusal::InvalidAllowedOrigin { .. }
+            ))
         ));
     }
 
@@ -327,7 +333,9 @@ mod tests {
                 "-H",
                 "0.0.0.0",
             ])),
-            Err(CliRefusal::Shared(SharedRefusal::InsecureBindRequired { .. }))
+            Err(CliRefusal::Shared(
+                SharedRefusal::InsecureBindRequired { .. }
+            ))
         ));
     }
 }
