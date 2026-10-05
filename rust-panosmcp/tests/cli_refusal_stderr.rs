@@ -74,7 +74,8 @@ fn off_loopback_without_allowed_origin_names_the_flag() {
     ]);
     assert_refusal(
         &output,
-        "non-loopback Streamable HTTP requires at least one --allowed-origin",
+        "non-loopback bind '0.0.0.0' requires at least one --allowed-origin \
+(the accepted browser Origin, e.g. https://server.example.org:8443)",
         "AllowedOriginRequired",
     );
 }
@@ -95,16 +96,17 @@ fn off_loopback_without_allowed_host_names_the_flag() {
     ]);
     assert_refusal(
         &output,
-        "non-loopback Streamable HTTP requires at least one --allowed-host",
+        "non-loopback bind '0.0.0.0' requires at least one --allowed-host \
+(the accepted HTTP Host authority, e.g. server.example.org:8443)",
         "AllowedHostRequired",
     );
 }
 
-/// The rules below exist only in this repo's validator, not in
-/// `mecmcp_runtime::cli_validate`. mecmcp#358 proposed deleting this repo's
-/// copy in favour of the shared one; these assertions record what that would
-/// cost, so a future convergence has to carry them upstream rather than drop
-/// them silently.
+/// `mecmcp_runtime::cli_validate` grew these rules in mecmcp#495 (MEC-981),
+/// which this server now delegates to via `shared_validate`. Kept here as a
+/// regression guard for the delegation itself, now that the logic (and the
+/// exact wording, which happens to be unchanged by the promotion) no longer
+/// lives in this repo.
 #[test]
 fn tokens_file_and_allow_no_auth_are_mutually_exclusive() {
     let tokens = tokens_file();
