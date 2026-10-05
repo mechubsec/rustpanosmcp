@@ -296,12 +296,12 @@ this again for the next one.
 The drop-in directory does not exist yet. `install.sh` does not create it,
 because a drop-in is a site decision. `mkdir -p` it first.
 
-**Service fails immediately with `Error: AllowedOriginRequired`** —
+**Service fails immediately with `Error: non-loopback bind '<host>' requires
+at least one --allowed-origin`** —
 The drop-in has no origin allowlist. An off-loopback listener must supply at
 least one `--allowed-origin` value. This is the trusted browser application
 origin (the Origin header), including the scheme (`http://` or `https://`) and
-port (e.g., `--allowed-origin http://console.example.org`). The terse error
-format is tracked as mechubsec/mecmcp#358.
+port (e.g., `--allowed-origin http://console.example.org`).
 
 **Service active but every call returns 421 `Host '<host>' is not allowed`** —
 `--allowed-host` does not match the address clients dial (the HTTP Host header).
