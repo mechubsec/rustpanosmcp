@@ -128,6 +128,11 @@ pub fn build_router(
                 provider_tier: entry.provider_tier,
                 on_behalf_of: entry.on_behalf_of.clone(),
                 actor_type: entry.actor_type,
+                oidc_subject: entry.oidc_subject.clone(),
+                // This server does not implement MEC-994 W3's
+                // `bind_approver` bearer preflight, so no request ever
+                // carries a verified approver assertion yet.
+                verified_approver: None,
                 client_name: None,
                 model_id: None,
                 session_id: None,
@@ -297,6 +302,7 @@ mod tests {
             provider_tier: None,
             on_behalf_of: None,
             actor_type: mecmcp_auth::ActorType::Unknown,
+            oidc_subject: None,
         }])
         .expect("store");
         assert_eq!(
