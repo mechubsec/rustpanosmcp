@@ -31,8 +31,8 @@ use rust_panosmcp_core::{
     inventory::{Environment, Inventory},
     mutation::{OperationInput, StageAction, StageConfigInput},
     tools::{
-        ConfigSource, ExecutePanosOpInput, GatherDeviceFactsInput, GetPanosConfigInput,
-        GetPanosEntryDigestInput, ListPanosEntriesInput, PanosService,
+        ConfigSource, ExecutePanosOpInput, GatherDeviceFactsInput, GetPanoramaPushStatusInput,
+        GetPanosConfigInput, GetPanosEntryDigestInput, ListPanosEntriesInput, PanosService,
     },
 };
 use std::{collections::BTreeMap, fs, net::TcpListener, sync::Arc};
@@ -51,6 +51,7 @@ fn fixture_secrets() -> &'static [&'static str] {
         "FAKEpsk_change_summary_20af6b",
         "FAKEpsk_error_message_9f2b7d",
         "FAKEphash_rulebase_entry_11c0aa",
+        "FAKEpsk_push_device_details_3fa219",
     ]
 }
 
@@ -106,6 +107,22 @@ async fn api(State(_state): State<Arc<()>>, Form(form): Form<BTreeMap<String, St
             // stage_config's own require-clean-candidate check; the mock
             // candidate never diverges outside this operation.
             return success("<result>no</result>");
+        }
+        if cmd.contains("<jobs>") {
+            // get_panorama_push_status: a per-device push failure detail
+            // line can quote the offending config fragment, the same text
+            // class as the overall job's own `<details>`.
+            return success(&format!(
+                r#"<result><job><id>42</id><status>FIN</status><result>FAIL</result>
+                    <devices><entry>
+                        <serial-no>0011C1</serial-no>
+                        <status>FIN</status>
+                        <result>FAIL</result>
+                        <details><msg><errors><line>duplicate pre-shared-key {}</line></errors></msg></details>
+                    </entry></devices>
+                </job></result>"#,
+                "FAKEpsk_push_device_details_3fa219"
+            ));
         }
         // execute_panos_op: an arbitrary read-only op command.
         return success(&format!(
@@ -380,6 +397,34 @@ async fn get_panos_entry_digest_never_carries_a_secret() {
 }
 
 #[tokio::test]
+async fn get_panorama_push_status_redacts_per_device_details() {
+    let fixture = fixture().await;
+    let out = fixture
+        .service
+        .get_panorama_push_status(
+            GetPanoramaPushStatusInput {
+                device: "test-fw".to_owned(),
+                job_id: "42".to_owned(),
+            },
+            None,
+            CancellationToken::new(),
+        )
+        .await
+        .expect("push status");
+    let rendered = serde_json::to_string(&out).expect("serialize");
+    assert_no_secret_leak("get_panorama_push_status", &rendered);
+    assert!(
+        out.devices[0]
+            .details
+            .as_deref()
+            .expect("device details")
+            .contains("[REDACTED"),
+        "expected a redaction placeholder in: {:?}",
+        out.devices[0].details
+    );
+}
+
+#[tokio::test]
 async fn diff_panos_candidate_redacts_the_change_summary() {
     let fixture = fixture().await;
     let before = fixture
@@ -462,11 +507,15 @@ async fn diff_panos_candidate_redacts_the_change_summary() {
 ///   file's own coverage table stays an accurate map of what it checks.
 /// - `get_panos_ha_state`, `get_panos_license_info`,
 ///   `get_panos_content_status`, `get_panos_software_status`,
-///   `list_panorama_device_groups`, `list_panorama_templates`,
-///   `get_panorama_push_status`: each parses only named, non-secret fields
-///   out of the device response (status/version/serial/date strings) into a
-///   typed struct -- none retains a raw `ConfigEntry.xml` or free-text
-///   field, so there is no redaction call to exercise. Covered functionally
-///   in `typed_reads.rs`.
+///   `list_panorama_device_groups`, `list_panorama_templates`: each parses
+///   only named, non-secret fields out of the device response (status/
+///   version/serial/date strings) into a typed struct -- none retains a raw
+///   `ConfigEntry.xml` or free-text field, so there is no redaction call to
+///   exercise. Covered functionally in `typed_reads.rs`.
+/// - `get_panorama_push_status` is exercised directly below
+///   (`get_panorama_push_status_redacts_per_device_details`): unlike the
+///   tools above, its `PushDeviceStatus.details` field carries PAN-OS's own
+///   per-device commit/push failure text, which is the same free-text class
+///   `parse_job_status`'s `JobStatus.details` is redacted for.
 #[test]
 fn documented_exclusions_from_the_table_above() {}

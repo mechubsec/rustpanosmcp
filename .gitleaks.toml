@@ -3,21 +3,18 @@ title = "rustpanosmcp gitleaks config"
 [extend]
 path = ".gitleaks-vendor.toml"
 
-# MEC-528: these files exist solely to exercise
-# `redact_secret_material` (rust-panosmcp-core/src/xml.rs) against
-# realistic PAN-OS output -- a fake admin phash (`$9$...`/`$1$...`/`$8$...`)
-# and a fake PEM RSA private key block. They contain no real device output
-# or credential material. The redaction unit tests were moved out of
-# `xml.rs` itself and into `tests/xml_redact_secret_material.rs` so this
-# allowlist doesn't have to cover the rest of that (much larger,
-# non-fixture) source file. `mutation_lifecycle.rs` carries one synthetic
-# `$1$fakesalt$...` phash in its mock change-summary fixture, to prove
-# diff_candidate's change summary is redacted (MEC-528 low finding).
+# MEC-528: these files exist solely to exercise `mecmcp_redact`'s
+# redaction passes (invoked via `mecmcp_redact::redact_text` in
+# rust-panosmcp-core/src/xml.rs) against realistic PAN-OS output -- a fake
+# admin phash (`$9$...`/`$1$...`/`$8$...`) and a fake PEM RSA private key
+# block. They contain no real device output or credential material.
+# `mutation_lifecycle.rs` carries one synthetic `$1$fakesalt$...` phash in
+# its mock change-summary fixture, to prove diff_candidate's change summary
+# is redacted (MEC-528 low finding).
 [allowlist]
-description = "MEC-528 redact_secret_material test fixtures (fake secrets only)"
+description = "MEC-528 redaction test fixtures (fake secrets only)"
 paths = [
   '''(^|/)\.gitleaks(-vendor)?\.toml$''',
   '''(^|/)rust-panosmcp-core/tests/secret_redaction\.rs$''',
-  '''(^|/)rust-panosmcp-core/tests/xml_redact_secret_material\.rs$''',
   '''(^|/)rust-panosmcp-core/tests/mutation_lifecycle\.rs$''',
 ]
