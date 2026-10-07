@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Official MCP Registry metadata: `server.json` for the stdio container
+  invocation, and the `io.modelcontextprotocol.server.name` image label.
+
 ### Changed
 
 - The container image is published for `linux/amd64` only; the `linux/arm64`
