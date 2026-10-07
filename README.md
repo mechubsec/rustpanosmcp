@@ -149,14 +149,15 @@ with the same shape as `config/devices.example.json`:
 }
 ```
 
-Create `state/tokens.json` with a least-privilege bearer token, then make the
-inventory and token store readable only by the container user (`uid:gid
-65532:65532`); `state/tokens.json` must have mode `0600`:
+Make the mounted inventory and state files readable and writable only by the
+container user (`uid:gid 65532:65532`); secret-bearing files must have mode
+`0600`. Stdio is local to the launcher and does not use the HTTP bearer-token
+store:
 
 ```bash
 mkdir -p state
-chmod 0600 devices.json state/tokens.json
-sudo chown 65532:65532 devices.json state/tokens.json state
+chmod 0600 devices.json
+sudo chown 65532:65532 devices.json state
 
 docker run --rm -i \
   --user 65532:65532 \
@@ -168,9 +169,11 @@ docker run --rm -i \
 ```
 
 The image ENTRYPOINT already supplies the config, token, state, and audit-key
-paths, so do not repeat those flags after the image name. This invocation
-leaves HTTP and TLS off: supplying `--transport stdio` replaces the image CMD,
-including its HTTP bind and port flags.
+paths, so do not repeat those flags after the image name. The token path is
+only used by HTTP; stdio is unauthenticated at the process boundary and relies
+on the launcher for trust. This invocation leaves HTTP and TLS off: supplying
+`--transport stdio` replaces the image CMD, including its HTTP bind and port
+flags.
 
 #### Build from source
 
