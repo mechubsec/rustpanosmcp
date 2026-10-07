@@ -129,6 +129,49 @@ or lab-mode `docker run` invocation (including the port publish and the flags
 the baked-in ENTRYPOINT already supplies) or use the included
 `compose.example.yaml`.
 
+### Run with Docker
+
+For MCP clients that launch a server over stdin/stdout, prepare an inventory
+with the same shape as `config/devices.example.json`:
+
+```json
+{
+  "version": 1,
+  "devices": [
+    {
+      "name": "panos-demo",
+      "endpoint": "https://192.0.2.20",
+      "vsys": "vsys1",
+      "api_key": { "type": "env", "name": "PANOS_DEMO_API_KEY" },
+      "tags": ["lab", "read-only"]
+    }
+  ]
+}
+```
+
+Create `state/tokens.json` with a least-privilege bearer token, then make the
+inventory and token store readable only by the container user (`uid:gid
+65532:65532`); `state/tokens.json` must have mode `0600`:
+
+```bash
+mkdir -p state
+chmod 0600 devices.json state/tokens.json
+sudo chown 65532:65532 devices.json state/tokens.json state
+
+docker run --rm -i \
+  --user 65532:65532 \
+  -e PANOS_DEMO_API_KEY=replace-with-runtime-secret \
+  -v "$PWD/devices.json:/etc/rust-panosmcp/devices.json:ro" \
+  -v "$PWD/state:/var/lib/rust-panosmcp" \
+  ghcr.io/mechubsec/rustpanosmcp:0.15.0 \
+  --transport stdio
+```
+
+The image ENTRYPOINT already supplies the config, token, state, and audit-key
+paths, so do not repeat those flags after the image name. This invocation
+leaves HTTP and TLS off: supplying `--transport stdio` replaces the image CMD,
+including its HTTP bind and port flags.
+
 #### Build from source
 
 Requires Rust 1.89 or newer (MSRV).
