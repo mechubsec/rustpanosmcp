@@ -10,55 +10,20 @@ on:
         description: 'Semver image version, for example 0.2.0'
         required: true
 
-env:
-  IMAGE: ghcr.io/${{ github.repository }}
-
 jobs:
-  build-push:
-    runs-on: ubuntu-24.04
+  release:
     permissions:
       contents: read
       packages: write
+      # Keyless cosign signing exchanges this job's OIDC token for a
+      # short-lived Fulcio certificate; no key material is stored anywhere.
+      # A reusable workflow's permissions can only be narrowed by the
+      # caller, never widened, so this job must grant them itself -- see
+      # mecmcp's docs/RELEASE-WORKFLOWS.md.
       id-token: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Docker metadata
-        id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
-        with:
-          images: ${{ env.IMAGE }}
-          tags: |
-            type=semver,pattern={{version}},value=${{ github.event.inputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ github.event.inputs.version }}
-            type=raw,value=latest
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
-
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push with provenance and SBOM
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            VERSION=${{ github.event.inputs.version || github.ref_name }}
-            VCS_REF=${{ github.sha }}
-          provenance: mode=max
-          sbom: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+    uses: mechubsec/mecmcp/.github/workflows/reusable-release-image.yml@v0.26.1
+    with:
+      # GHCR requires a lowercase image path; github.repository is already lowercase.
+      image: ghcr.io/${{ github.repository }}
+      version: ${{ github.event.inputs.version }}
+      platforms: linux/amd64,linux/arm64
