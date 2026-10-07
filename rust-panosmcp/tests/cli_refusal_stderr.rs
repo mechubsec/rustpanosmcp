@@ -7,9 +7,8 @@
 //! documentation quoted a sentence naming the flag. See mecmcp#358.
 //!
 //! The assertions deliberately run the real binary rather than calling
-//! `cli_validate::validate` directly. The defect was never in the validator: it
-//! returned the right `CliRefusal` the whole time. It was in how `main`
-//! rendered it, and only a process boundary can observe that.
+//! `mecmcp_runtime::cli_validate::validate_or_exit` directly. The process
+//! boundary keeps the operator-facing contract observable.
 
 use std::io::Write;
 use std::process::{Command, Output};
@@ -100,11 +99,8 @@ fn off_loopback_without_allowed_host_names_the_flag() {
     );
 }
 
-/// The rules below exist only in this repo's validator, not in
-/// `mecmcp_runtime::cli_validate`. mecmcp#358 proposed deleting this repo's
-/// copy in favour of the shared one; these assertions record what that would
-/// cost, so a future convergence has to carry them upstream rather than drop
-/// them silently.
+/// Auth, host, and origin rules are shared with mecmcp; these assertions pin
+/// their behavior at the server process boundary.
 #[test]
 fn tokens_file_and_allow_no_auth_are_mutually_exclusive() {
     let tokens = tokens_file();

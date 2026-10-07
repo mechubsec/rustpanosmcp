@@ -5,7 +5,7 @@ use rmcp::ServiceExt;
 use rust_panosmcp::{
     PanosMcpServer, RuntimeState,
     cli::{Cli, Command, StateAction, StateDisposition, Transport},
-    cli_validate,
+    cli_validate_extra,
     http_transport::{self, HttpOptions},
     token_cmd,
 };
@@ -236,21 +236,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    // Report the refusal with `Display`, not `Debug`.
-    //
-    // `main` returns `Box<dyn Error>`, and Rust's default reporter prints the
-    // `Debug` form. A bare `?` therefore printed `Error: AllowedOriginRequired`
-    // — the enum variant, not the flag the operator has to add, and a string
-    // that appears nowhere in the documentation because no message was ever
-    // written to say it. Boxing `e.to_string()` instead is no better: `String`
-    // Debug-prints with quotes.
-    //
-    // Every `CliRefusal` already carries an `#[error(...)]` naming the flag.
-    // Printing it here is what actually puts it on stderr. Validation runs
-    // before the inventory, secrets, sockets and TLS are loaded, so there is
-    // nothing to unwind; exiting 1 matches what returning `Err` from `main`
-    // already did. See mecmcp#358.
-    if let Err(refusal) = cli_validate::validate(&cli) {
+    // The shared validator owns the common refusal matrix and operator-facing
+    // stderr text. Keep the Pan-OS-only path and resource-limit checks after
+    // it, but before inventory, secrets, sockets, or TLS are loaded.
+    mecmcp_runtime::cli_validate::validate_or_exit(&cli);
+    if let Err(refusal) = cli_validate_extra::validate(&cli) {
         eprintln!("Error: {refusal}");
         std::process::exit(1);
     }

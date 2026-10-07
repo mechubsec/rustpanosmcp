@@ -25,15 +25,16 @@ fastrand = "2"
 futures-util = "0.3"
 getrandom = "0.4"
 http = "1"
-# mecmcp is consumed at an exact pinned version. Do not relax the tag.
-mecmcp-audit = { version = "0.25.0", git = "https://github.com/mechubsec/mecmcp", tag = "v0.25.0" }
-mecmcp-auth = { version = "0.25.0", git = "https://github.com/mechubsec/mecmcp", tag = "v0.25.0" }
-mecmcp-changeset = { version = "0.25.0", git = "https://github.com/mechubsec/mecmcp", tag = "v0.25.0" }
-mecmcp-inventory = { version = "0.25.0", git = "https://github.com/mechubsec/mecmcp", tag = "v0.25.0" }
-mecmcp-policy = { version = "0.25.0", git = "https://github.com/mechubsec/mecmcp", tag = "v0.25.0" }
-mecmcp-redact = { version = "0.25.0", git = "https://github.com/mechubsec/mecmcp", tag = "v0.25.0" }
-mecmcp-runtime = { version = "0.25.0", git = "https://github.com/mechubsec/mecmcp", tag = "v0.25.0" }
-mecmcp-transport = { version = "0.25.0", git = "https://github.com/mechubsec/mecmcp", tag = "v0.25.0" }
+# Keep the mecmcp revision aligned until the release containing cli_validate's
+# shared exit helper is tagged.
+mecmcp-audit = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "850e825" }
+mecmcp-auth = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "850e825" }
+mecmcp-changeset = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "850e825" }
+mecmcp-inventory = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "850e825" }
+mecmcp-policy = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "850e825" }
+mecmcp-redact = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "850e825" }
+mecmcp-runtime = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "850e825" }
+mecmcp-transport = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "850e825" }
 quick-xml = "0.42"
 reqwest = { version = "0.13", default-features = false, features = ["form", "rustls-no-provider", "stream"] }
 rmcp = { version = "3", default-features = false }

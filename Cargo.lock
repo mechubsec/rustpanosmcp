@@ -1362,8 +1362,8 @@ checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 
 [[package]]
 name = "mecmcp-audit"
-version = "0.25.0"
-source = "git+https://github.com/mechubsec/mecmcp?tag=v0.25.0#6bd42f89f8b0311526e773434a811b390557f81f"
+version = "0.26.1"
+source = "git+https://github.com/mechubsec/mecmcp?rev=850e825#850e825f6a9ee2b3f04583b66720a7fb4808ad2d"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -1392,8 +1392,8 @@ dependencies = [
 
 [[package]]
 name = "mecmcp-auth"
-version = "0.25.0"
-source = "git+https://github.com/mechubsec/mecmcp?tag=v0.25.0#6bd42f89f8b0311526e773434a811b390557f81f"
+version = "0.26.1"
+source = "git+https://github.com/mechubsec/mecmcp?rev=850e825#850e825f6a9ee2b3f04583b66720a7fb4808ad2d"
 dependencies = [
  "arc-swap",
  "chrono",
@@ -1411,8 +1411,8 @@ dependencies = [
 
 [[package]]
 name = "mecmcp-changeset"
-version = "0.25.0"
-source = "git+https://github.com/mechubsec/mecmcp?tag=v0.25.0#6bd42f89f8b0311526e773434a811b390557f81f"
+version = "0.26.1"
+source = "git+https://github.com/mechubsec/mecmcp?rev=850e825#850e825f6a9ee2b3f04583b66720a7fb4808ad2d"
 dependencies = [
  "async-trait",
  "getrandom 0.4.3",
@@ -1436,8 +1436,8 @@ dependencies = [
 
 [[package]]
 name = "mecmcp-inventory"
-version = "0.25.0"
-source = "git+https://github.com/mechubsec/mecmcp?tag=v0.25.0#6bd42f89f8b0311526e773434a811b390557f81f"
+version = "0.26.1"
+source = "git+https://github.com/mechubsec/mecmcp?rev=850e825#850e825f6a9ee2b3f04583b66720a7fb4808ad2d"
 dependencies = [
  "mecmcp-secret",
  "serde",
@@ -1450,18 +1450,19 @@ dependencies = [
 
 [[package]]
 name = "mecmcp-policy"
-version = "0.25.0"
-source = "git+https://github.com/mechubsec/mecmcp?tag=v0.25.0#6bd42f89f8b0311526e773434a811b390557f81f"
+version = "0.26.1"
+source = "git+https://github.com/mechubsec/mecmcp?rev=850e825#850e825f6a9ee2b3f04583b66720a7fb4808ad2d"
 dependencies = [
  "globset",
+ "quick-xml",
  "serde",
  "thiserror",
 ]
 
 [[package]]
 name = "mecmcp-redact"
-version = "0.25.0"
-source = "git+https://github.com/mechubsec/mecmcp?tag=v0.25.0#6bd42f89f8b0311526e773434a811b390557f81f"
+version = "0.26.1"
+source = "git+https://github.com/mechubsec/mecmcp?rev=850e825#850e825f6a9ee2b3f04583b66720a7fb4808ad2d"
 dependencies = [
  "hmac",
  "quick-xml",
@@ -1473,12 +1474,13 @@ dependencies = [
 
 [[package]]
 name = "mecmcp-runtime"
-version = "0.25.0"
-source = "git+https://github.com/mechubsec/mecmcp?tag=v0.25.0#6bd42f89f8b0311526e773434a811b390557f81f"
+version = "0.26.1"
+source = "git+https://github.com/mechubsec/mecmcp?rev=850e825#850e825f6a9ee2b3f04583b66720a7fb4808ad2d"
 dependencies = [
  "anyhow",
  "clap",
  "getrandom 0.4.3",
+ "http",
  "mecmcp-audit",
  "mecmcp-auth",
  "mecmcp-secret",
@@ -1491,8 +1493,8 @@ dependencies = [
 
 [[package]]
 name = "mecmcp-secret"
-version = "0.25.0"
-source = "git+https://github.com/mechubsec/mecmcp?tag=v0.25.0#6bd42f89f8b0311526e773434a811b390557f81f"
+version = "0.26.1"
+source = "git+https://github.com/mechubsec/mecmcp?rev=850e825#850e825f6a9ee2b3f04583b66720a7fb4808ad2d"
 dependencies = [
  "rustix",
  "thiserror",
@@ -1501,11 +1503,12 @@ dependencies = [
 
 [[package]]
 name = "mecmcp-transport"
-version = "0.25.0"
-source = "git+https://github.com/mechubsec/mecmcp?tag=v0.25.0#6bd42f89f8b0311526e773434a811b390557f81f"
+version = "0.26.1"
+source = "git+https://github.com/mechubsec/mecmcp?rev=850e825#850e825f6a9ee2b3f04583b66720a7fb4808ad2d"
 dependencies = [
  "axum",
  "axum-server",
+ "chrono",
  "dashmap",
  "futures",
  "http",

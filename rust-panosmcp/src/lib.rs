@@ -1,7 +1,7 @@
 //! MCP adapters and atomically reloadable runtime state for rust-panosmcp.
 
 pub mod cli;
-pub mod cli_validate;
+pub mod cli_validate_extra;
 pub mod http_transport;
 pub mod token_cmd;
 
