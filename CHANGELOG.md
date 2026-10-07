@@ -80,8 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI release-image build migrated to mecmcp's reusable
   `reusable-release-image.yml` workflow, adding keyless cosign signing of
   the pushed digest that this pipeline previously lacked. The pin now
-  tracks `v0.27.0`, which also dual-pushes the release image to Docker Hub
-  alongside GHCR.
+  tracks `v0.27.0`.
 - Pinned the `mecmcp-*` crates to the released `v0.24.0` tag instead of an
   unreleased commit, then moved to `v0.24.1` (default-on request rate
   limits), then to `v0.27.0` for this release (adds the `mecmcp-approve`
