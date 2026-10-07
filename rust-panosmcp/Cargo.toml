@@ -25,8 +25,8 @@ mecmcp-audit.workspace = true
 mecmcp-runtime.workspace = true
 mecmcp-transport.workspace = true
 rmcp = { workspace = true, features = ["macros", "schemars", "server", "transport-io", "transport-streamable-http-server"] }
-rust-panosmcp-auth = { version = "0.15.0", path = "../rust-panosmcp-auth" }
-rust-panosmcp-core = { version = "0.15.0", path = "../rust-panosmcp-core" }
+rust-panosmcp-auth = { version = "0.16.0", path = "../rust-panosmcp-auth" }
+rust-panosmcp-core = { version = "0.16.0", path = "../rust-panosmcp-core" }
 rustix.workspace = true
 rustls.workspace = true
 schemars.workspace = true
