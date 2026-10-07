@@ -81,6 +81,10 @@ pub fn run(action: TokenAction, known_devices: &[String]) -> Result<(), TokenCom
                 provenance.provider_tier,
                 provenance.on_behalf_of,
                 provenance.actor_type,
+                // This server's `token add` CLI does not yet expose an
+                // --oidc-issuer/--oidc-subject flag (MEC-994 W1 scope), so no
+                // token created here is pre-bound to an IdP identity.
+                None,
                 &known,
             )?;
             writeln!(std::io::stdout().lock(), "{}", secret.expose_secret())?;

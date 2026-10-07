@@ -19,6 +19,7 @@ fn benchmark_maximum_token_store_lookup() {
             provider_tier: None,
             on_behalf_of: None,
             actor_type: ActorType::Unknown,
+            oidc_subject: None,
         })
         .collect();
     let store = TokenStore::try_new(entries).expect("maximum supported token store");

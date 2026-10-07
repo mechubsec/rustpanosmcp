@@ -5,7 +5,6 @@ use crate::{
     client::PanosClient,
     inventory::{DeviceMetadata, Inventory},
     observability::AuditScope,
-    state_lock::StateFileLock,
     xml::{
         ConfigEntry, ContentVersionEntry, DeviceFacts, DeviceGroupSummary, HaState, JobStatus,
         LicenseEntry, PushDeviceStatus, SoftwareVersionEntry, TemplateSummary,
@@ -121,11 +120,6 @@ pub struct PanosService {
     /// with no second-principal approval at all. Refused by default; set via
     /// --allow-direct-commit.
     pub(crate) direct_commit: mecmcp_audit::DirectCommitPolicy,
-    /// OS advisory lock on the persisted state file, held for the life of
-    /// this service so a second process cannot open the same state file and
-    /// race its atomic-rename writes. `None` when running with no persisted
-    /// state (`state_path: None`) -- there is no file to corrupt.
-    _state_lock: Option<Arc<StateFileLock>>,
 }
 
 impl PanosService {
@@ -173,14 +167,18 @@ impl PanosService {
             approval_timeout_secs.unwrap_or(crate::mutation::APPROVAL_TTL_SECS),
         );
 
-        // Locked before the state file is even read, so two processes racing
-        // on startup are serialized here rather than both recovering from
-        // and then both writing to the same file.
-        let state_lock = match state_path {
-            Some(path) => Some(Arc::new(StateFileLock::acquire(path)?)),
-            None => None,
-        };
-
+        // `mecmcp_changeset::ChangesetCoordinator` claims its own exclusive,
+        // whole-lifetime ownership lock on the state file before reading it
+        // (MEC-540), serializing two processes racing on startup the same
+        // way a lock taken here would -- so this no longer takes one of its
+        // own. It used to (#205), back when the coordinator had no such
+        // guarantee; doing it twice at this path stopped being redundant and
+        // started being a self-deadlock once mecmcp 0.25.0 added a *second*,
+        // blocking lock of its own on every read-modify-write cycle against
+        // the exact same sibling `<state file>.lock`: a lock taken here and
+        // held for the service's whole life would never be released for that
+        // per-write lock to ever acquire (MEC-1158).
+        //
         // PAN-OS keeps the candidate server-side and identifies it by operation
         // id, so a staged operation survives a restart intact — unlike Junos,
         // whose staged handle is a live NETCONF session. Declaring that here lets
@@ -208,7 +206,6 @@ impl PanosService {
             evidence,
             allow_plane_owned_writes,
             allow_direct_commit,
-            state_lock,
         )
     }
 
@@ -222,22 +219,15 @@ impl PanosService {
             previous.evidence.clone(),
             previous.allow_plane_owned_writes,
             previous.direct_commit.is_allowed(),
-            // The same lock the previous service acquired: a SIGHUP rebuild
-            // stays in this process, so re-acquiring would just contend with
-            // ourselves. Dropping the previous `Self` after this returns
-            // keeps exactly one strong reference alive throughout.
-            previous._state_lock.clone(),
         )
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn build(
         inventory: Inventory,
         mutations: Arc<mecmcp_changeset::ChangesetCoordinator>,
         evidence: Option<Arc<mecmcp_audit::recorder::EvidenceRecorder>>,
         allow_plane_owned_writes: bool,
         allow_direct_commit: bool,
-        state_lock: Option<Arc<StateFileLock>>,
     ) -> Result<Self> {
         let mut clients = BTreeMap::new();
         for device in inventory.entries() {
@@ -259,7 +249,6 @@ impl PanosService {
             command_allowlists,
             allow_plane_owned_writes,
             direct_commit: mecmcp_audit::DirectCommitPolicy::new(allow_direct_commit),
-            _state_lock: state_lock,
         })
     }
 
@@ -1162,7 +1151,7 @@ impl PanosService {
                     cancellation,
                 )
                 .await?;
-            let rules = parse_security_policy_match(&response)?;
+            let mut rules = parse_security_policy_match(&response)?;
             let first_entry = rules.first();
             // Some PAN-OS releases return a text-form entry (`rule; index:
             // N`) with no `name` attribute; report that as a parse error
@@ -1179,6 +1168,13 @@ impl PanosService {
                 .map(|entry| crate::xml::extract_element_text(&entry.xml, "action"))
                 .transpose()?
                 .flatten();
+            // `action` is pulled from each entry's raw XML above, before the
+            // loop below redacts it -- `rules` here carries the matched
+            // rule's exact source XML, redacted the same way every other
+            // tool that returns a `ConfigEntry` is (MEC-1233).
+            for entry in &mut rules {
+                entry.xml = crate::redact::redact_device_xml(&entry.xml);
+            }
             Ok(TestPanosSecurityPolicyMatchOutput {
                 device: input.device,
                 matched: !rules.is_empty(),

@@ -25,23 +25,18 @@ fastrand = "2"
 futures-util = "0.3"
 getrandom = "0.4"
 http = "1"
-# TEMPORARY: pinned to a rev on mechubsec/mecmcp main, not a released tag.
-# mecmcp-redact (added by mecmcp#386, hardened by mecmcp#432) has not shipped
-# a tagged release yet -- the latest tag, v0.24.1, predates it. Cargo requires
-# every crate sourced from one git repo to resolve to the identical git ref,
-# so ALL mecmcp-* crates below are pinned to this same `rev`, not just the
-# one this server newly depends on -- pinning only mecmcp-redact to a later
-# rev while the rest stay on `tag = "v0.24.0"` would resolve two copies of
-# the mecmcp dependency graph (e.g. two incompatible `CallerCtx` types).
-# Replace `rev` with a released `tag` once that history ships one.
-mecmcp-audit = { version = "0.24.1", git = "https://github.com/mechubsec/mecmcp", rev = "2e157e0f09894e2a5309408523c0911425eebd20" }
-mecmcp-auth = { version = "0.24.1", git = "https://github.com/mechubsec/mecmcp", rev = "2e157e0f09894e2a5309408523c0911425eebd20" }
-mecmcp-changeset = { version = "0.24.1", git = "https://github.com/mechubsec/mecmcp", rev = "2e157e0f09894e2a5309408523c0911425eebd20" }
-mecmcp-inventory = { version = "0.24.1", git = "https://github.com/mechubsec/mecmcp", rev = "2e157e0f09894e2a5309408523c0911425eebd20" }
-mecmcp-policy = { version = "0.24.1", git = "https://github.com/mechubsec/mecmcp", rev = "2e157e0f09894e2a5309408523c0911425eebd20" }
-mecmcp-redact = { version = "0.24.1", git = "https://github.com/mechubsec/mecmcp", rev = "2e157e0f09894e2a5309408523c0911425eebd20" }
-mecmcp-runtime = { version = "0.24.1", git = "https://github.com/mechubsec/mecmcp", rev = "2e157e0f09894e2a5309408523c0911425eebd20" }
-mecmcp-transport = { version = "0.24.1", git = "https://github.com/mechubsec/mecmcp", rev = "2e157e0f09894e2a5309408523c0911425eebd20" }
+# mecmcp is consumed at an exact pinned commit, not a tag: mecmcp#496 (shared
+# cli_validate hardening, MEC-981/MEC-994) merged to main but hasn't shipped a
+# release yet. Replace `rev` with a released `tag` once one ships that
+# includes it, and bump `version` to match.
+mecmcp-audit = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "ffae2cfa10d53611b479e655c2ddf38b2a2e78ba" }
+mecmcp-auth = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "ffae2cfa10d53611b479e655c2ddf38b2a2e78ba" }
+mecmcp-changeset = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "ffae2cfa10d53611b479e655c2ddf38b2a2e78ba" }
+mecmcp-inventory = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "ffae2cfa10d53611b479e655c2ddf38b2a2e78ba" }
+mecmcp-policy = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "ffae2cfa10d53611b479e655c2ddf38b2a2e78ba" }
+mecmcp-redact = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "ffae2cfa10d53611b479e655c2ddf38b2a2e78ba" }
+mecmcp-runtime = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "ffae2cfa10d53611b479e655c2ddf38b2a2e78ba" }
+mecmcp-transport = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "ffae2cfa10d53611b479e655c2ddf38b2a2e78ba" }
 quick-xml = "0.42"
 reqwest = { version = "0.13", default-features = false, features = ["form", "rustls-no-provider", "stream"] }
 rmcp = { version = "3", default-features = false }

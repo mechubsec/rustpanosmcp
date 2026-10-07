@@ -78,6 +78,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   range, and `docs/OPERATIONS.md`'s stale title and release-verification
   example.
 
+### Security
+
+- Hardened secret redaction in tool output, write-path token-scope
+  enforcement, and the config-read blocklist, and corrected rate limiting to
+  match its documented units. No externally reported incident is known;
+  details are intentionally not published here.
+
 ## [0.14.0] - 2026-09-16
 
 ### Security

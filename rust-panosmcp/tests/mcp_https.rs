@@ -46,9 +46,9 @@ async fn api(
     Form(form): Form<BTreeMap<String, String>>,
 ) -> String {
     state.requests.fetch_add(1, Ordering::SeqCst);
-    if !headers
+    if headers
         .get("X-PAN-KEY")
-        .is_some_and(|value| value.as_bytes() == KEY.as_bytes())
+        .is_none_or(|value| value.as_bytes() != KEY.as_bytes())
     {
         state.bad_headers.fetch_add(1, Ordering::SeqCst);
     }

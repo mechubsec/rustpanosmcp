@@ -295,6 +295,8 @@ impl PanosMcpServer {
                 provider_tier: ctx.provider_tier,
                 on_behalf_of: ctx.on_behalf_of.clone(),
                 actor_type: ctx.actor_type,
+                oidc_subject: ctx.oidc_subject.clone(),
+                verified_approver: ctx.verified_approver.clone(),
                 client_name: ctx.client_name,
                 model_id: ctx.model_id,
                 session_id: ctx.session_id.clone(),

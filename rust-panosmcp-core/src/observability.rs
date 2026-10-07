@@ -16,6 +16,7 @@ mod tests {
             audit_log_file: None,
             redaction: None,
             journald: false,
+            otel: None,
         };
         assert!(init_tracing(&cfg).is_ok());
     }
@@ -38,6 +39,7 @@ mod tests {
             audit_log_file: Some(unusable_path),
             redaction: None,
             journald: false,
+            otel: None,
         };
         assert!(
             init_tracing(&cfg).is_err(),

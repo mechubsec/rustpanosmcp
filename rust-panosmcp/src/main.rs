@@ -193,6 +193,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         audit_log_file: cli.audit_log_file.clone(),
         redaction,
         journald: cli.audit_journald,
+        otel: None,
     };
     let audit_sink = rust_panosmcp_core::observability::init_tracing(&audit_cfg)?;
 

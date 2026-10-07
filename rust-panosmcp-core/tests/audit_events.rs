@@ -16,6 +16,7 @@ async fn audit_events_emitted_for_tool_calls() {
         audit_log_file: None,
         redaction: None,
         journald: false,
+        otel: None,
     };
     let _ = rust_panosmcp_core::observability::init_tracing(&audit_cfg);
 
