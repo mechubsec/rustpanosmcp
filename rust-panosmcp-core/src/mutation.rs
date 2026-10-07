@@ -590,6 +590,11 @@ impl PanosService {
                 actions: actions_json,
                 digest: digest.clone(),
                 state: ChangeSetState::Planned,
+                // This server does not yet implement MEC-994's step-up
+                // verified-approver assertion (no `bind_approver` preflight
+                // wired in), so there is no owner OIDC subject to record.
+                // `None` preserves the pre-MEC-994 legacy approval path.
+                owner_subject: None,
                 approver: None,
                 approval: None,
                 // From the coordinator, not the constant: an operator who sets
@@ -707,6 +712,15 @@ impl PanosService {
             Some(rust_panosmcp_auth::ActorType::Unknown) | None => mecmcp_audit::ActorType::Unknown,
         };
 
+        // This server does not yet implement MEC-994's step-up
+        // verified-approver assertion (no `bind_approver` preflight wired
+        // in), so every approver is asserted by its bearer token alone --
+        // the pre-MEC-994 identity, carried through unchanged.
+        let approver_identity = mecmcp_changeset::ApproverIdentity::TokenAsserted {
+            principal: approver.to_owned(),
+            actor_type,
+        };
+
         let result = async {
             // Use shared coordinator's approve_change_set which handles all validation
             let output = self
@@ -714,9 +728,8 @@ impl PanosService {
                 .approve_change_set(
                     input.change_set_id.clone(),
                     input.device.clone(),
-                    approver.to_owned(),
+                    &approver_identity,
                     input.expected_digest,
-                    actor_type,
                 )
                 .await
                 .map_err(coord_error)?;
@@ -2744,6 +2757,7 @@ mod tests {
             change_ref: None,
             request_id: uuid::Uuid::nil(),
             token_verified_fields: mecmcp_audit::TokenVerifiedFields::none(),
+            verified_approver: None,
             approver: None,
             change_set_id: None,
         };

@@ -397,6 +397,8 @@ async fn change_set_requires_exact_independent_approval_and_applies_as_one_opera
         provider_tier: None,
         on_behalf_of: None,
         actor_type: rust_panosmcp_auth::ActorType::Human,
+        oidc_subject: None,
+        verified_approver: None,
         client_name: None,
         model_id: None,
         session_id: None,
@@ -601,6 +603,8 @@ async fn approve_change_set_by_agent_actor_is_refused() {
         provider_tier: None,
         on_behalf_of: None,
         actor_type: rust_panosmcp_auth::ActorType::Agent,
+        oidc_subject: None,
+        verified_approver: None,
         client_name: None,
         model_id: None,
         session_id: None,
@@ -895,6 +899,8 @@ async fn commit_candidate_without_change_set_is_refused_without_the_flag() {
         provider_tier: None,
         on_behalf_of: None,
         actor_type: rust_panosmcp_auth::ActorType::Human,
+        oidc_subject: None,
+        verified_approver: None,
         client_name: None,
         model_id: None,
         session_id: None,
@@ -1368,11 +1374,12 @@ async fn foreign_pending_change_outside_allowed_roots_is_refused() {
     );
 }
 
-/// Percy F4 (MEC-533 re-review): `state_lock`'s own unit tests prove the
-/// `flock` primitive works in isolation. This proves the wiring -- that
-/// `PanosService::new_with_options` takes the lock before a second process
-/// (here, a second `PanosService` in this same process, indistinguishable to
-/// `flock`) can open the same state file while the first is still live.
+/// Percy F4 (MEC-533 re-review): a second process must not be able to open
+/// the same state file while the first is still live. Enforced by
+/// `mecmcp_changeset::ChangesetCoordinator`'s own exclusive, whole-lifetime
+/// ownership lock (MEC-540) rather than a lock of this crate's own (MEC-1158
+/// removed the latter: a second, redundant lock on the same sibling file
+/// self-deadlocked against the coordinator's new per-write lock).
 #[tokio::test]
 async fn second_service_on_the_same_state_file_is_refused() {
     let _serial = AUDIT_SERIAL.lock().await;

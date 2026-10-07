@@ -6,7 +6,6 @@ pub mod inventory;
 pub mod mutation;
 pub mod observability;
 pub(crate) mod redact;
-mod state_lock;
 pub mod tools;
 pub mod version_advisory;
 pub mod xml;

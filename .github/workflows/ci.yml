@@ -153,7 +153,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Conformance
-        uses: mechubsec/mecmcp/packaging/conformance@0403d3ad6dd70551d60b59f5f11c6816bf0d89d7
+        uses: mechubsec/mecmcp/packaging/conformance@373dc51cac90b97e728e20363b4b05d7b2c179a5
         with:
           staging: staging
           manifest: staging/conformance.toml
@@ -200,7 +200,7 @@ jobs:
           # Regression test for mecmcp#357: config paths must survive operator overrides.
           # Docker replaces CMD entirely when the caller supplies args, but ENTRYPOINT
           # is appended to. Security-relevant flags (device-mapping, tokens-file,
-          # state-file) must live in ENTRYPOINT so they cannot be lost.
+          # state-file, audit-hmac-key-file) must live in ENTRYPOINT so they cannot be lost.
           container_id=$(docker create rust-panosmcp:ci --host 0.0.0.0)
           argv=$(docker inspect "$container_id" --format '{{join .Args "\n"}}')
           docker rm "$container_id" > /dev/null
@@ -208,6 +208,11 @@ jobs:
           echo "$argv" | grep -q -- '--tokens-file' || { echo "FAIL: --tokens-file missing from argv with --host override"; exit 1; }
           echo "$argv" | grep -q -- '--state-file' || { echo "FAIL: --state-file missing from argv with --host override"; exit 1; }
           echo "$argv" | grep -q -- '--device-mapping' || { echo "FAIL: --device-mapping missing from argv with --host override"; exit 1; }
+          # mecmcp#376 / MEC-978: packaging/conformance.toml's must_survive_override
+          # already lists --audit-hmac-key-file, and conformance R6 enforces it via
+          # verify-image.sh. Duplicate that check here so the docker-build job fails
+          # fast too, without waiting on the separate conformance job.
+          echo "$argv" | grep -q -- '--audit-hmac-key-file' || { echo "FAIL: --audit-hmac-key-file missing from argv with --host override"; exit 1; }
           echo "PASS: config paths survive --host override"
 
       - name: Upload release candidate

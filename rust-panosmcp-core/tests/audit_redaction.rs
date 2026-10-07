@@ -167,6 +167,7 @@ async fn redaction_applies_to_newly_audited_tools() {
         audit_log_file: None,
         redaction: Some(redaction),
         journald: false,
+        otel: None,
     };
     init_tracing(&cfg).expect("init tracing with redaction");
 

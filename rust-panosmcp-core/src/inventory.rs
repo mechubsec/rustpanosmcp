@@ -165,7 +165,7 @@ pub struct DeviceConfig {
 /// the ancestor request never contains the descendant's text. Rely on the
 /// PAN-OS admin role restriction (this server's role must not be able to
 /// read `<mgt-config>` or certificate private keys at all) and
-/// `redact_secret_material`'s structural/value-shape passes as the actual
+/// `mecmcp_redact`'s structural/value-shape passes as the actual
 /// confidentiality controls; treat this blocklist as an operator-facing
 /// convenience for narrowing *intentional* reads, not a boundary a caller is
 /// prevented from reading past.

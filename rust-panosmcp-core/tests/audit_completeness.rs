@@ -591,6 +591,8 @@ async fn all_tools_emit_audit_events() {
         provider_tier: None,
         on_behalf_of: None,
         actor_type: rust_panosmcp_auth::ActorType::Human,
+        oidc_subject: None,
+        verified_approver: None,
         client_name: None,
         model_id: None,
         session_id: None,

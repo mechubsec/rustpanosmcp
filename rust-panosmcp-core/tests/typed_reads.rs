@@ -99,6 +99,15 @@ async fn api(
             // (`rule; index: N`) with no `name` attribute.
             return success("<result><rules><entry>rule; index: 0</entry></rules></result>");
         }
+        if command.contains("203.0.113.77") {
+            // A matched rule's free-text description can carry secret
+            // material the same way a rulebase/config-log entry can; this
+            // fixture exercises the redaction pass over `rules[].xml`
+            // (MEC-1233).
+            return success(
+                r#"<result><rules><entry name="allow-secret-rule"><from>trust</from><to>untrust</to><action>allow</action><description>psk -AQ==zzzzsecret111 phash $6$abc$secrethash</description></entry></rules></result>"#,
+            );
+        }
         return success(
             r#"<result><rules><entry name="allow-web"><from>trust</from><to>untrust</to><action>allow</action></entry></rules></result>"#,
         );
@@ -348,6 +357,51 @@ async fn security_policy_match_reports_a_deny_rules_action() {
     assert!(denied.matched);
     assert_eq!(denied.rule_name.as_deref(), Some("block-untrust"));
     assert_eq!(denied.action.as_deref(), Some("deny"));
+}
+
+/// A matched rule's `xml` field must have secret material redacted the same
+/// way every other tool that carries a `ConfigEntry` does -- PAN-OS's own
+/// API returns a rule's free-text description verbatim alongside the match,
+/// and that description can carry secret material the operator put there
+/// (MEC-1233). `action` must still come back correctly even though it is
+/// read from the same raw XML before redaction runs.
+#[tokio::test]
+async fn security_policy_match_redacts_secret_material_in_matched_rule_xml() {
+    let (service, _state) = fixture().await;
+
+    let out = service
+        .test_panos_security_policy_match(
+            TestPanosSecurityPolicyMatchInput {
+                device: "test-fw".to_owned(),
+                source: "203.0.113.77".parse().expect("ip"),
+                destination: "192.0.2.20".parse().expect("ip"),
+                destination_port: Some(443),
+                protocol: IpProtocol::Tcp,
+                from_zone: None,
+                to_zone: None,
+                application: None,
+                source_user: None,
+                vsys: None,
+            },
+            None,
+            CancellationToken::new(),
+        )
+        .await
+        .expect("policy match");
+
+    assert!(out.matched);
+    assert_eq!(out.rule_name.as_deref(), Some("allow-secret-rule"));
+    // The action is extracted from the raw XML before the redaction pass
+    // below runs over `rules` -- it must survive that ordering.
+    assert_eq!(out.action.as_deref(), Some("allow"));
+    assert_eq!(out.rules.len(), 1);
+    let xml = &out.rules[0].xml;
+    assert!(
+        !xml.contains("-AQ==zzzzsecret111"),
+        "master-key blob leaked"
+    );
+    assert!(!xml.contains("$6$abc$secrethash"), "crypt hash leaked");
+    assert!(xml.contains("[REDACTED"));
 }
 
 /// `destination_port` is optional for `icmp`, which has no port. It is
