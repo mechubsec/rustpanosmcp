@@ -1,0 +1,87 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.mechubsec/rustpanosmcp",
+  "title": "rust-panosmcp",
+  "description": "PAN-OS firewall MCP server: scoped, audited, two-person change control. Rust.",
+  "version": "0.16.0",
+  "websiteUrl": "https://mechub.org/projects/rustpanosmcp/",
+  "repository": {
+    "url": "https://github.com/mechubsec/rustpanosmcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/mechubsec/rustpanosmcp:0.16.0",
+      "runtimeHint": "docker",
+      "runtimeArguments": [
+        {
+          "type": "positional",
+          "value": "--rm",
+          "isRequired": true
+        },
+        {
+          "type": "positional",
+          "value": "-i",
+          "isRequired": true
+        },
+        {
+          "type": "named",
+          "name": "--user",
+          "value": "65532:65532",
+          "isRequired": true
+        },
+        {
+          "type": "named",
+          "name": "-v",
+          "value": "{devices_file}:/etc/rust-panosmcp/devices.json:ro",
+          "isRequired": true,
+          "variables": {
+            "devices_file": {
+              "description": "Absolute host path to devices.json. Credential material stays in environment variables or separate files named by that inventory, not in this manifest.",
+              "format": "filepath",
+              "isRequired": true
+            }
+          }
+        },
+        {
+          "type": "named",
+          "name": "-v",
+          "value": "{state_dir}:/var/lib/rust-panosmcp",
+          "isRequired": true,
+          "variables": {
+            "state_dir": {
+              "description": "Absolute host directory for persistent state (change sets, audit HMAC key); must be writable by UID 65532",
+              "format": "filepath",
+              "isRequired": true
+            }
+          }
+        },
+        {
+          "type": "named",
+          "name": "-e",
+          "value": "{credential_env}",
+          "isRequired": false,
+          "isRepeated": true,
+          "variables": {
+            "credential_env": {
+              "description": "Environment variable name referenced by devices.json (api_key type env). Pass the name only, as in docker -e NAME, so the value is not written into this argument.",
+              "isRequired": true
+            }
+          }
+        }
+      ],
+      "packageArguments": [
+        {
+          "type": "named",
+          "name": "--transport",
+          "value": "stdio",
+          "isRequired": true
+        }
+      ],
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
