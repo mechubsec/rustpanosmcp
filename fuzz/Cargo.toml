@@ -11,8 +11,8 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-rust-panosmcp-auth = { version = "0.15.0", path = "../rust-panosmcp-auth" }
-rust-panosmcp-core = { version = "0.15.0", path = "../rust-panosmcp-core" }
+rust-panosmcp-auth = { version = "0.16.0", path = "../rust-panosmcp-auth" }
+rust-panosmcp-core = { version = "0.16.0", path = "../rust-panosmcp-core" }
 serde_json = "1"
 
 [[bin]]
