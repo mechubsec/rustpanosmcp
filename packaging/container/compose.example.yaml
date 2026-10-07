@@ -1,6 +1,6 @@
 services:
   rust-panosmcp:
-    image: ghcr.io/mechubsec/rustpanosmcp:0.15.0
+    image: ghcr.io/mechubsec/rustpanosmcp:0.16.0
     user: "65532:65532"
     read_only: true
     cap_drop: ["ALL"]
