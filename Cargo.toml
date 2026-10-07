@@ -36,6 +36,7 @@ mecmcp-inventory = { version = "0.26.1", git = "https://github.com/mechubsec/mec
 mecmcp-policy = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "ffae2cfa10d53611b479e655c2ddf38b2a2e78ba" }
 mecmcp-redact = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "ffae2cfa10d53611b479e655c2ddf38b2a2e78ba" }
 mecmcp-runtime = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "ffae2cfa10d53611b479e655c2ddf38b2a2e78ba" }
+mecmcp-secret = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "ffae2cfa10d53611b479e655c2ddf38b2a2e78ba" }
 mecmcp-transport = { version = "0.26.1", git = "https://github.com/mechubsec/mecmcp", rev = "ffae2cfa10d53611b479e655c2ddf38b2a2e78ba" }
 quick-xml = "0.42"
 reqwest = { version = "0.13", default-features = false, features = ["form", "rustls-no-provider", "stream"] }
