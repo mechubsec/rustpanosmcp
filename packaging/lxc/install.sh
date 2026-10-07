@@ -20,6 +20,31 @@ fail() {
     exit 1
 }
 
+# Remove any generated-content temp file left behind by a failed run.
+cleanup_tmp_files() {
+    rm -f "${tokens_tmp:-}" "${audit_key_tmp:-}"
+}
+trap cleanup_tmp_files EXIT
+
+# Refuse to operate on a path that is not a plain file, so a caller never
+# chmod/chown/writes through whatever unexpected entry happens to sit at a
+# destination this installer does not fully control.
+require_regular_file() {
+    local path="$1"
+    if [[ -L "$path" ]] || { [[ -e "$path" ]] && [[ ! -f "$path" ]]; }; then
+        fail "$path is not a regular file; refusing"
+    fi
+}
+
+# Install generated content ($tmp) at $target with a fixed mode. install(1)
+# replaces an existing non-regular destination rather than writing through
+# it, so pair this with a require_regular_file check immediately beforehand
+# rather than relying on install(1) alone.
+install_owned() {
+    local mode="$1" tmp="$2" target="$3"
+    install -m "$mode" "$tmp" "$target"
+}
+
 target_path() {
     local relative="${1#/}"
     if [[ "$INSTALL_ROOT" == "/" ]]; then
@@ -212,6 +237,7 @@ fi
 # the state directory exists before writing to it.
 install -d -m 0700 "$STATE_DIR"
 
+require_regular_file "$STATE_DIR/tokens.json"
 if [[ ! -e "$STATE_DIR/tokens.json" ]]; then
     if [[ -e "$CONFIG_DIR/tokens.json" ]]; then
         printf '%s\n' ">> Not creating $STATE_DIR/tokens.json: a token store already exists at"
@@ -220,13 +246,18 @@ if [[ ! -e "$STATE_DIR/tokens.json" ]]; then
         printf '%s\n' ">>   install -m 0600 -o $SERVICE_USER -g $SERVICE_GROUP $CONFIG_DIR/tokens.json $STATE_DIR/tokens.json"
         printf '%s\n' ">>   rm $CONFIG_DIR/tokens.json"
     else
-        printf '%s\n' '{"version":1,"tokens":[]}' >"$STATE_DIR/tokens.json"
-        chmod 0600 "$STATE_DIR/tokens.json"
+        tokens_tmp=$(mktemp)
+        printf '%s\n' '{"version":1,"tokens":[]}' >"$tokens_tmp"
+        install_owned 0600 "$tokens_tmp" "$STATE_DIR/tokens.json"
+        rm -f "$tokens_tmp"
     fi
 fi
 
 # Ensure tokens.json has 0600 even on upgrade.
-chmod 0600 "$STATE_DIR/tokens.json"
+if [[ -e "$STATE_DIR/tokens.json" ]]; then
+    require_regular_file "$STATE_DIR/tokens.json"
+    chmod 0600 "$STATE_DIR/tokens.json"
+fi
 
 # Warn if the old /etc location still exists — it may be a live file from
 # before the /var/lib migration, or it may be a leftover decoy. Do not delete:
@@ -239,13 +270,17 @@ fi
 
 # Create audit HMAC key if absent. Never regenerate on upgrade — a new key
 # breaks verification of every prior record.
+require_regular_file "$CONFIG_DIR/audit-hmac.key"
 if [[ ! -e "$CONFIG_DIR/audit-hmac.key" ]]; then
-    head -c 32 /dev/urandom | base64 >"$CONFIG_DIR/audit-hmac.key"
-    chmod 0600 "$CONFIG_DIR/audit-hmac.key"
+    audit_key_tmp=$(mktemp)
+    head -c 32 /dev/urandom | base64 >"$audit_key_tmp"
+    install_owned 0600 "$audit_key_tmp" "$CONFIG_DIR/audit-hmac.key"
+    rm -f "$audit_key_tmp"
 fi
 
 # If devices.json exists, ensure it has 0600.
 if [[ -e "$CONFIG_DIR/devices.json" ]]; then
+    require_regular_file "$CONFIG_DIR/devices.json"
     chmod 0600 "$CONFIG_DIR/devices.json"
 fi
 
@@ -253,18 +288,23 @@ fi
 # Leave it exactly alone if it exists.
 
 if [[ "$SKIP_USER_SETUP" != "1" ]]; then
-    chown "$SERVICE_USER:$SERVICE_GROUP" "$CONFIG_DIR"
+    chown -h "$SERVICE_USER:$SERVICE_GROUP" "$CONFIG_DIR"
     if [[ -e "$CONFIG_DIR/devices.json" ]]; then
-        chown "$SERVICE_USER:$SERVICE_GROUP" "$CONFIG_DIR/devices.json"
+        require_regular_file "$CONFIG_DIR/devices.json"
+        chown -h "$SERVICE_USER:$SERVICE_GROUP" "$CONFIG_DIR/devices.json"
     fi
     if [[ -e "$CONFIG_DIR/devices.json.example" ]]; then
-        chown "$SERVICE_USER:$SERVICE_GROUP" "$CONFIG_DIR/devices.json.example"
+        require_regular_file "$CONFIG_DIR/devices.json.example"
+        chown -h "$SERVICE_USER:$SERVICE_GROUP" "$CONFIG_DIR/devices.json.example"
     fi
     if [[ -e "$CONFIG_DIR/audit-hmac.key" ]]; then
-        chown "$SERVICE_USER:$SERVICE_GROUP" "$CONFIG_DIR/audit-hmac.key"
+        require_regular_file "$CONFIG_DIR/audit-hmac.key"
+        chown -h "$SERVICE_USER:$SERVICE_GROUP" "$CONFIG_DIR/audit-hmac.key"
     fi
     # The state dir holds tokens.json, mutation-state.json, evidence files.
-    # Recursive ownership for everything under /var/lib.
+    # Recursive ownership for everything under /var/lib. GNU chown -R does not
+    # follow a symlink it encounters while recursing (it operates on the link
+    # itself), so this is safe against a planted symlink inside STATE_DIR.
     chown -R "$SERVICE_USER:$SERVICE_GROUP" "$STATE_DIR" 2>/dev/null || true
 fi
 
