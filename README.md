@@ -129,7 +129,7 @@ or lab-mode `docker run` invocation (including the port publish and the flags
 the baked-in ENTRYPOINT already supplies) or use the included
 `compose.example.yaml`.
 
-### Run with Docker
+#### Run with Docker (stdio)
 
 For MCP clients that launch a server over stdin/stdout, prepare an inventory
 with the same shape as `config/devices.example.json`:
@@ -137,10 +137,14 @@ with the same shape as `config/devices.example.json`:
 ```json
 {
   "version": 1,
+  "policy": {
+    "mode": "allowlist",
+    "allow": ["show system info", "show interface all"]
+  },
   "devices": [
     {
       "name": "panos-demo",
-      "endpoint": "https://192.0.2.20",
+      "endpoint": "https://panos-demo.example.net",
       "vsys": "vsys1",
       "api_key": { "type": "env", "name": "PANOS_DEMO_API_KEY" },
       "tags": ["lab", "read-only"]
@@ -149,10 +153,19 @@ with the same shape as `config/devices.example.json`:
 }
 ```
 
+Export the API-key variable before launching the container. This passthrough
+form keeps the key out of the command line and Docker's inspect output:
+
+```bash
+export PANOS_DEMO_API_KEY=replace-with-runtime-secret
+```
+
 Make the mounted inventory and state files readable and writable only by the
 container user (`uid:gid 65532:65532`); secret-bearing files must have mode
-`0600`. Stdio is local to the launcher and does not use the HTTP bearer-token
-store:
+`0600`. Stdio is unauthenticated at the process boundary: the launcher can
+use every device in the mounted inventory and every tool, so scope access by
+limiting that inventory and using a read-only PAN-OS API role. The state
+directory must be writable because the server creates its audit state there.
 
 ```bash
 mkdir -p state
@@ -161,7 +174,7 @@ sudo chown 65532:65532 devices.json state
 
 docker run --rm -i \
   --user 65532:65532 \
-  -e PANOS_DEMO_API_KEY=replace-with-runtime-secret \
+  -e PANOS_DEMO_API_KEY \
   -v "$PWD/devices.json:/etc/rust-panosmcp/devices.json:ro" \
   -v "$PWD/state:/var/lib/rust-panosmcp" \
   ghcr.io/mechubsec/rustpanosmcp:0.15.0 \
@@ -170,10 +183,10 @@ docker run --rm -i \
 
 The image ENTRYPOINT already supplies the config, token, state, and audit-key
 paths, so do not repeat those flags after the image name. The token path is
-only used by HTTP; stdio is unauthenticated at the process boundary and relies
-on the launcher for trust. This invocation leaves HTTP and TLS off: supplying
+only used by HTTP. This invocation leaves HTTP and listener TLS off: supplying
 `--transport stdio` replaces the image CMD, including its HTTP bind and port
-flags.
+flags. Connections to the firewall still use HTTPS according to the
+inventory's TLS trust settings.
 
 #### Build from source
 
