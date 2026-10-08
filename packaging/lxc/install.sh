@@ -36,14 +36,18 @@ require_regular_file() {
     fi
 }
 
-# chmod a file that may already be owned by the service account, running the
-# chmod as that account rather than as root so the operation never has more
-# reach than the account already has. Fresh-install paths are still
-# root-owned at this point and fall back to a root-run chmod.
+# chmod a file that may sit in a directory the service account owns, running
+# the chmod as that account rather than as root so the operation never has
+# more reach than the account already has. The decision is keyed on the
+# *parent directory's* owner, not the file's: a root-owned file freshly
+# created by this installer inside a service-owned directory is exactly the
+# case a swap-and-replace race targets, so checking the file itself would
+# miss it.
 secure_chmod() {
     local mode="$1" path="$2"
-    local owner=""
-    owner="$(stat -c '%U' "$path" 2>/dev/null || true)"
+    local parent owner=""
+    parent="$(dirname -- "$path")"
+    owner="$(stat -c '%U' "$parent" 2>/dev/null || true)"
     if [[ "$SKIP_USER_SETUP" != "1" && "$owner" == "$SERVICE_USER" ]]; then
         runuser -u "$SERVICE_USER" -- chmod "$mode" "$path"
     else
@@ -222,6 +226,17 @@ fi
 
 # Install config example (not to the live filename).
 install -d -m 0750 "$CONFIG_DIR"
+
+# Repair a config dir left service-owned by a prior install before writing
+# anything into it. tmpfiles declares this directory root:group — the
+# service unit runs with ProtectSystem=strict and never needs to write here
+# itself — so the service account owning it gives it nothing except the
+# ability to swap entries out from under the root-run creates below.
+if [[ "$SKIP_USER_SETUP" != "1" ]]; then
+    chown -h "root:$SERVICE_GROUP" "$CONFIG_DIR"
+    chmod 0750 "$CONFIG_DIR"
+fi
+
 if [[ -e "$PACKAGE_ROOT/config/devices.example.json" ]]; then
     install -m 0644 "$PACKAGE_ROOT/config/devices.example.json" \
         "$CONFIG_DIR/devices.json.example"
@@ -251,6 +266,21 @@ if [[ ! -e "$STATE_DIR/tokens.json" ]]; then
         printf '%s\n' ">> Migrate it deliberately, then remove the old copy:"
         printf '%s\n' ">>   install -m 0600 -o $SERVICE_USER -g $SERVICE_GROUP $CONFIG_DIR/tokens.json $STATE_DIR/tokens.json"
         printf '%s\n' ">>   rm $CONFIG_DIR/tokens.json"
+    elif [[ "$SKIP_USER_SETUP" != "1" ]]; then
+        # $STATE_DIR is service-account-owned from tmpfiles onward, so root
+        # must not create by path inside it: between mktemp returning and a
+        # root-run open-by-name, the owning account could swap the entry for
+        # a link elsewhere and have root write through it. Do the create as
+        # the account that already owns the dir instead — that grants it
+        # nothing it doesn't already have.
+        runuser -u "$SERVICE_USER" -- sh -c '
+            umask 077
+            dir=$1
+            tmp=$(mktemp "$dir/.tokens.json.XXXXXX") || exit 1
+            trap "rm -f \"\$tmp\"" EXIT
+            printf "%s\n" "{\"version\":1,\"tokens\":[]}" >"$tmp"
+            mv -fT "$tmp" "$dir/tokens.json"
+        ' sh "$STATE_DIR"
     else
         tokens_tmp="$(mktemp "$STATE_DIR/.tokens.json.XXXXXX")"
         printf '%s\n' '{"version":1,"tokens":[]}' >"$tokens_tmp"
@@ -292,7 +322,10 @@ fi
 # Leave it exactly alone if it exists.
 
 if [[ "$SKIP_USER_SETUP" != "1" ]]; then
-    chown -h "$SERVICE_USER:$SERVICE_GROUP" "$CONFIG_DIR"
+    # $CONFIG_DIR itself stays root-owned (see the re-own step right after
+    # it's created, above) — the service unit runs with ProtectSystem=strict
+    # and never writes there, so handing the service account rename/unlink
+    # rights over the directory would only recreate the F3 race this closes.
     if [[ -e "$CONFIG_DIR/devices.json" ]]; then
         require_regular_file "$CONFIG_DIR/devices.json"
         chown -h "$SERVICE_USER:$SERVICE_GROUP" "$CONFIG_DIR/devices.json"
