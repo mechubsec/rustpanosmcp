@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# Regression test: the installer must refuse to write/chmod through a
-# dangling or redirected symlink planted at a root-written path inside a
-# service-writable directory (tokens.json, audit-hmac.key, devices.json).
-# A compromised service process could otherwise plant such a symlink before
-# the next install/upgrade runs as root, causing the root process to write
-# or chmod/chown whatever the symlink points to.
+# Regression test: the installer must refuse to operate on tokens.json,
+# audit-hmac.key, or devices.json when the existing path is not a regular
+# file, and must leave whatever that path points to untouched.
 
 set -euo pipefail
 

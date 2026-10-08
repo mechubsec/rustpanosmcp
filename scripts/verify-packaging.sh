@@ -89,8 +89,8 @@ else
 fi
 
 # Run the installer symlink-hardening regression test.
-if [[ -x "$ROOT/packaging/lxc/tests/test_symlink_hardening.sh" ]]; then
-    "$ROOT/packaging/lxc/tests/test_symlink_hardening.sh"
+if [[ -x "$ROOT/packaging/lxc/tests/test_installer_path_guard.sh" ]]; then
+    "$ROOT/packaging/lxc/tests/test_installer_path_guard.sh"
 else
     echo "WARN: installer symlink-hardening test not found or not executable" >&2
 fi
