@@ -137,6 +137,13 @@ else
     echo "WARN: install/unit consistency test not found or not executable" >&2
 fi
 
+# Run the installer path-guard regression test.
+if [[ -x "$ROOT/packaging/lxc/tests/test_installer_path_guard.sh" ]]; then
+    "$ROOT/packaging/lxc/tests/test_installer_path_guard.sh"
+else
+    echo "WARN: installer path-guard test not found or not executable" >&2
+fi
+
 if (( failures > 0 )); then
     printf 'packaging policy: FAIL (%d violation(s))\n' "$failures" >&2
     exit 1
