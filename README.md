@@ -156,8 +156,9 @@ with the same shape as `config/devices.example.json`:
 Export the API-key variable before launching the container. This passthrough
 form keeps the key out of the command line, but Docker daemon access can still
 expose environment values through inspection. For stricter handling, use the
-file-based API-key form shown in the inventory example and mount that file
-read-only with mode 0600.
+file-based API-key form (`{"type":"file","path":"/protected/path"}`)
+documented in the configuration section below and mount that file read-only
+with mode 0600.
 
 ```bash
 export PANOS_DEMO_API_KEY=replace-with-runtime-secret
