@@ -32,6 +32,7 @@ mecmcp-inventory = { version = "0.27.0", git = "https://github.com/mechubsec/mec
 mecmcp-policy = { version = "0.27.0", git = "https://github.com/mechubsec/mecmcp", tag = "v0.27.0" }
 mecmcp-redact = { version = "0.27.0", git = "https://github.com/mechubsec/mecmcp", tag = "v0.27.0" }
 mecmcp-runtime = { version = "0.27.0", git = "https://github.com/mechubsec/mecmcp", tag = "v0.27.0" }
+mecmcp-secret = { version = "0.27.0", git = "https://github.com/mechubsec/mecmcp", tag = "v0.27.0" }
 mecmcp-transport = { version = "0.27.0", git = "https://github.com/mechubsec/mecmcp", tag = "v0.27.0" }
 quick-xml = "0.42"
 reqwest = { version = "0.13", default-features = false, features = ["form", "rustls-no-provider", "stream"] }
