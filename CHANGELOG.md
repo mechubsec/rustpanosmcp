@@ -7,13 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Official MCP Registry metadata: `server.json` for the stdio container
+  invocation, and the `io.modelcontextprotocol.server.name` image label.
+
 ### Changed
 
-- **Container images now publish to `ghcr.io/mechubsec/rustpanosmcp`** —
-  the repo moved to the mechubsec organization, and images are renamed to
-  match. Older tags were copied from the previous name.
+- The container image is published for `linux/amd64` only; the `linux/arm64`
+  build is dropped.
 
-## [0.15.0] - 2026-09-29
+## [0.16.0] - 2026-10-07
+
+> **0.15.0 was never published.** It was cut and documented here, but the
+> release tag was never pushed. This entry folds that work together with
+> everything merged since, covering v0.14.0 through the current release.
 
 ### Added
 
@@ -42,6 +50,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   identically over stdio and HTTP. With it, the server logs loudly at startup
   and every such call is audited (`direct_commit_allowed=true`; a refusal is
   audited too). See `--allow-direct-commit` in the README.
+- Packaging conformance now fatal-checks (R7) that the audit-HMAC key flag is
+  baked into the image `ENTRYPOINT`, and the operator-CMD-override regression
+  test covers `--audit-hmac-key-file` alongside the existing `--tokens-file`
+  / `--state-file` / `--device-mapping` checks, closing the loop on an
+  operator override silently un-keying the audit log.
+- A stdio-startup regression test confirms the Docker MCP Toolkit entrypoint
+  never requires an HTTP-only bearer-token-store path to be present.
 
 ### Changed
 
@@ -62,8 +77,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refused by the `--allow-direct-commit` gate is now recorded as
   `authorization=denied` with `reason=direct_commit_disabled`, instead of a
   generic `result=error`.
+- **Container images now publish to `ghcr.io/mechubsec/rustpanosmcp`** —
+  the repo moved to the mechubsec organization, and images are renamed to
+  match. Older tags were copied from the previous name.
+- **`cli_validate` now delegates its common rules to
+  `mecmcp_runtime::cli_validate`**, dropping this repo's private fork in
+  favor of the shared validator for the rules it already covers, and keeping
+  only the checks that have no shared equivalent yet (state/tokens/TLS
+  absolute-path checks, and this server's own request-body/rate limits).
+- Adopted the shared `mecmcp-redact` PAN-OS profile for tool output,
+  extended redaction coverage to an additional typed-read field, broadened
+  the regression coverage for that path, and removed an internal redaction
+  helper left over from before this crate adopted the shared library.
+- CI release-image build migrated to mecmcp's reusable
+  `reusable-release-image.yml` workflow, adding keyless cosign signing of
+  the pushed digest that this pipeline previously lacked. The pin now
+  tracks `v0.27.0`.
 - Pinned the `mecmcp-*` crates to the released `v0.24.0` tag instead of an
-  unreleased commit, then moved to `v0.24.1` (default-on request rate limits).
+  unreleased commit, then moved to `v0.24.1` (default-on request rate
+  limits), then to `v0.27.0` for this release (adds the `mecmcp-approve`
+  CLI, a step-up verified-approver assertion path for change-set approval,
+  OIDC relying-party hardening, and shared `cli_validate` rule coverage —
+  all additive/opt-in on the consumer side).
 - Raised Rust MSRV from 1.88 to 1.89.
 - Fixed the Docker/compose setup docs and examples to match the image: the
   ENTRYPOINT bakes in `--tokens-file` and `--state-file` as well as

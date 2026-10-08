@@ -12,7 +12,7 @@
 
 > **Unofficial / community project.** This is an independent community project and does not claim affiliation with or endorsement by Palo Alto Networks. Product names and trademarks are used only to identify the systems with which the software interoperates.
 
-The repository contains the v0.15.0 release: a bearer-protected server with structured audit logging, guarded PAN-OS candidate configuration lifecycle, and hardened release packaging, with authentication and auditing provided by the shared [`mecmcp-auth`](https://github.com/mechubsec/mecmcp) and [`mecmcp-audit`](https://github.com/mechubsec/mecmcp) crates.
+The repository contains the v0.16.0 release: a bearer-protected server with structured audit logging, guarded PAN-OS candidate configuration lifecycle, and hardened release packaging, with authentication and auditing provided by the shared [`mecmcp-auth`](https://github.com/mechubsec/mecmcp) and [`mecmcp-audit`](https://github.com/mechubsec/mecmcp) crates.
 
 The project goal is a small, fast, production-oriented server with the same
 security posture as `rust-junosmcp`: bearer-token authentication, per-token
@@ -44,17 +44,17 @@ Choose one of three install paths:
 
 #### Release tarball (Linux x86_64)
 
-Download the latest release from [GitHub releases](https://github.com/mechubsec/rustpanosmcp/releases). Assets follow the pattern `rust-panosmcp-v0.15.0-x86_64-unknown-linux-gnu.tar.gz` with a corresponding `.sha256` file.
+Download the latest release from [GitHub releases](https://github.com/mechubsec/rustpanosmcp/releases). Assets follow the pattern `rust-panosmcp-v0.16.0-x86_64-unknown-linux-gnu.tar.gz` with a corresponding `.sha256` file.
 
 ```bash
 # Download and verify
-curl -LO https://github.com/mechubsec/rustpanosmcp/releases/download/v0.15.0/rust-panosmcp-v0.15.0-x86_64-unknown-linux-gnu.tar.gz
-curl -LO https://github.com/mechubsec/rustpanosmcp/releases/download/v0.15.0/rust-panosmcp-v0.15.0-x86_64-unknown-linux-gnu.tar.gz.sha256
-sha256sum -c rust-panosmcp-v0.15.0-x86_64-unknown-linux-gnu.tar.gz.sha256
+curl -LO https://github.com/mechubsec/rustpanosmcp/releases/download/v0.16.0/rust-panosmcp-v0.16.0-x86_64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/mechubsec/rustpanosmcp/releases/download/v0.16.0/rust-panosmcp-v0.16.0-x86_64-unknown-linux-gnu.tar.gz.sha256
+sha256sum -c rust-panosmcp-v0.16.0-x86_64-unknown-linux-gnu.tar.gz.sha256
 
 # Extract
-tar xzf rust-panosmcp-v0.15.0-x86_64-unknown-linux-gnu.tar.gz
-cd rust-panosmcp-v0.15.0
+tar xzf rust-panosmcp-v0.16.0-x86_64-unknown-linux-gnu.tar.gz
+cd rust-panosmcp-v0.16.0
 
 # Install the binary and systemd assets
 sudo install -m 0755 bin/rust-panosmcp /usr/local/bin/rust-panosmcp
@@ -89,13 +89,13 @@ For a dedicated unprivileged LXC container on Proxmox or standalone systemd-nspa
 
 ```bash
 # Download and verify
-curl -LO https://github.com/mechubsec/rustpanosmcp/releases/download/v0.15.0/rust-panosmcp-v0.15.0-x86_64-unknown-linux-gnu.tar.gz
-curl -LO https://github.com/mechubsec/rustpanosmcp/releases/download/v0.15.0/rust-panosmcp-v0.15.0-x86_64-unknown-linux-gnu.tar.gz.sha256
-sha256sum -c rust-panosmcp-v0.15.0-x86_64-unknown-linux-gnu.tar.gz.sha256
+curl -LO https://github.com/mechubsec/rustpanosmcp/releases/download/v0.16.0/rust-panosmcp-v0.16.0-x86_64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/mechubsec/rustpanosmcp/releases/download/v0.16.0/rust-panosmcp-v0.16.0-x86_64-unknown-linux-gnu.tar.gz.sha256
+sha256sum -c rust-panosmcp-v0.16.0-x86_64-unknown-linux-gnu.tar.gz.sha256
 
 # Extract and run the installer
-tar xzf rust-panosmcp-v0.15.0-x86_64-unknown-linux-gnu.tar.gz
-cd rust-panosmcp-v0.15.0
+tar xzf rust-panosmcp-v0.16.0-x86_64-unknown-linux-gnu.tar.gz
+cd rust-panosmcp-v0.16.0
 sudo packaging/lxc/install.sh
 
 # Configure the inventory and mint the first token

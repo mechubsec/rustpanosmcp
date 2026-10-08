@@ -61,6 +61,55 @@ require_contains "Dockerfile" 'CMD ["--transport", "streamable-http", \'
 require_contains "Dockerfile" '"--host", "127.0.0.1", \'
 require_contains "Dockerfile" '"--port", "30031"]'
 
+# Official MCP Registry ownership label must equal server.json "name".
+# The OCI identifier tracks the workspace package version so the next release
+# tag and the manifest stay the same string.
+require_contains "Dockerfile" 'LABEL io.modelcontextprotocol.server.name="io.github.mechubsec/rustpanosmcp"'
+if ! python3 - << 'PY'
+import json, pathlib, re, sys
+root = pathlib.Path(".")
+server = json.loads((root / "server.json").read_text())
+cargo = (root / "Cargo.toml").read_text()
+version = re.search(r'(?m)^version = "([^"]+)"', cargo).group(1)
+name = "io.github.mechubsec/rustpanosmcp"
+errors = []
+if server.get("name") != name:
+    errors.append(f"name {server.get('name')!r} != {name}")
+if server.get("version") != version:
+    errors.append(f"version {server.get('version')!r} != Cargo.toml {version}")
+desc = server.get("description") or ""
+if not 1 <= len(desc) <= 100:
+    errors.append(f"description length {len(desc)} outside 1..100")
+pkgs = server.get("packages") or []
+if len(pkgs) != 1:
+    errors.append(f"expected one package, found {len(pkgs)}")
+else:
+    pkg = pkgs[0]
+    expect = f"ghcr.io/mechubsec/rustpanosmcp:{version}"
+    if pkg.get("identifier") != expect:
+        errors.append(f"identifier {pkg.get('identifier')!r} != {expect}")
+    if pkg.get("registryType") != "oci":
+        errors.append("registryType is not oci")
+    if (pkg.get("transport") or {}).get("type") != "stdio":
+        errors.append("transport is not stdio")
+    banned = {
+        "--device-mapping",
+        "--tokens-file",
+        "--state-file",
+        "--audit-hmac-key-file",
+        "--audit-redact",
+    }
+    for arg in pkg.get("packageArguments") or []:
+        if arg.get("name") in banned:
+            errors.append(f"package argument repeats entrypoint flag {arg.get('name')}")
+if errors:
+    print("server.json: " + "; ".join(errors), file=sys.stderr)
+    sys.exit(1)
+PY
+then
+    failures=$((failures + 1))
+fi
+
 # Regression guard for mecmcp#357: CMD must NOT contain config paths or
 # security-relevant flags. Docker replaces CMD when the caller supplies args,
 # so these must live in ENTRYPOINT to survive operator overrides.

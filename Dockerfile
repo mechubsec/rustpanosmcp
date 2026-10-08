@@ -38,6 +38,8 @@ LABEL org.opencontainers.image.title="rust-panosmcp" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.source="https://github.com/mechubsec/rustpanosmcp" \
       org.opencontainers.image.licenses="MIT"
+# Official MCP Registry ownership check: must equal server.json "name".
+LABEL io.modelcontextprotocol.server.name="io.github.mechubsec/rustpanosmcp"
 
 COPY --from=builder --chown=nonroot:nonroot /src/target/release/rust-panosmcp /usr/local/bin/rust-panosmcp
 

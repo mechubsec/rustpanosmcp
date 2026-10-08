@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-The latest `0.15.x` release and the default branch receive security
+The latest `0.16.x` release and the default branch receive security
 fixes. Pre-release branches are supported only while their pull request is
 active.
 
