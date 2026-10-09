@@ -25,5 +25,12 @@ jobs:
     with:
       # GHCR requires a lowercase image path; github.repository is already lowercase.
       image: ghcr.io/${{ github.repository }}
+      # Dual-push (mecmcp MEC-2110). Docker Hub org is `mechub`.
+      # platforms stays linux/amd64: Docker Hub images are amd64-only.
+      dockerhub-image: docker.io/mechub/rustpanosmcp
+      description: 'PAN-OS MCP server'
       version: ${{ github.event.inputs.version }}
       platforms: linux/amd64
+    secrets:
+      dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+      dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
