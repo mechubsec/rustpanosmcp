@@ -113,7 +113,7 @@ jobs:
           ref: ${{ needs.resolve-tag.outputs.tag }}
 
       - name: Install Rust 1.89
-        uses: dtolnay/rust-toolchain@1.89.0
+        uses: dtolnay/rust-toolchain@d77020bf130f2e8c39c025bf9c4c3a445fe2b9fa # 1.89.0
 
       - name: Build release archive
         env:
