@@ -23,6 +23,7 @@ http.workspace = true
 mecmcp-auth.workspace = true
 mecmcp-audit.workspace = true
 mecmcp-runtime.workspace = true
+mecmcp-secret.workspace = true
 mecmcp-transport.workspace = true
 rmcp = { workspace = true, features = ["macros", "schemars", "server", "transport-io", "transport-streamable-http-server"] }
 rust-panosmcp-auth = { version = "0.16.0", path = "../rust-panosmcp-auth" }

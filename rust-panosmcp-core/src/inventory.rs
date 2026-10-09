@@ -333,6 +333,55 @@ impl Inventory {
         Ok(names)
     }
 
+    /// Paths of file-backed API keys, without reading those files.
+    ///
+    /// The inventory document itself is read with [`std::fs::read`] and is not
+    /// mode-checked. Custom CA bundle paths are not returned: the inventory
+    /// loader accepts those separately from secret files, and this list is the
+    /// input to the startup secret-file check.
+    ///
+    /// # Errors
+    /// Returns an inventory error when the file cannot be read, is not the
+    /// expected JSON shape, or lists more devices than the server allows.
+    pub fn api_key_file_paths(path: impl AsRef<Path>) -> Result<Vec<PathBuf>> {
+        let path = path.as_ref();
+        let bytes = std::fs::read(path).map_err(|error| {
+            PanosMcpError::Inventory(format!("failed to read inventory: {error}"))
+        })?;
+
+        // Unknown fields are ignored. This only needs `api_key`; the full
+        // inventory load still rejects a document it cannot use.
+        #[derive(Deserialize)]
+        struct ApiKeyPathFile {
+            devices: Vec<ApiKeyPathDevice>,
+        }
+
+        #[derive(Deserialize)]
+        struct ApiKeyPathDevice {
+            api_key: ApiKeySource,
+        }
+
+        let parsed: ApiKeyPathFile = serde_json::from_slice(&bytes)
+            .map_err(|error| PanosMcpError::Inventory(format!("invalid JSON: {error}")))?;
+
+        if parsed.devices.len() > MAX_DEVICES {
+            return Err(PanosMcpError::Inventory(format!(
+                "inventory contains more than {MAX_DEVICES} devices"
+            )));
+        }
+
+        let mut paths = Vec::new();
+        let mut seen = BTreeSet::new();
+        for device in parsed.devices {
+            if let ApiKeySource::File { path } = device.api_key
+                && seen.insert(path.clone())
+            {
+                paths.push(path);
+            }
+        }
+        Ok(paths)
+    }
+
     /// Load an inventory with an injectable environment resolver.
     pub fn load_with_environment(
         path: impl AsRef<Path>,
@@ -1035,6 +1084,42 @@ mod tests {
         );
         let names = Inventory::device_names(&path).expect("device names without credentials");
         assert_eq!(names, vec!["fw"]);
+    }
+
+    /// A world-readable inventory is still readable. Only file-backed API keys
+    /// are returned; an env key and a custom CA bundle are not secret files.
+    #[test]
+    fn api_key_file_paths_lists_secret_files_and_skips_ca_bundles() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let directory = tempfile::tempdir().expect("tempdir");
+        let key_a = directory.path().join("a.key");
+        let key_b = directory.path().join("b.key");
+        let ca = directory.path().join("ca.pem");
+        let inventory = directory.path().join("devices.json");
+        fs::write(
+            &inventory,
+            format!(
+                r#"{{
+                    "version": 1,
+                    "devices": [
+                        {{"name": "fw-a", "endpoint": "https://a.test", "api_key": {{"type": "file", "path": "{}"}}, "tls": {{"type": "custom_ca", "path": "{}"}}}},
+                        {{"name": "fw-b", "endpoint": "https://b.test", "api_key": {{"type": "env", "name": "PANOS_TEST_KEY"}}}},
+                        {{"name": "fw-c", "endpoint": "https://c.test", "api_key": {{"type": "file", "path": "{}"}}}},
+                        {{"name": "fw-d", "endpoint": "https://d.test", "api_key": {{"type": "file", "path": "{}"}}}}
+                    ]
+                }}"#,
+                key_a.display(),
+                ca.display(),
+                key_b.display(),
+                key_a.display(),
+            ),
+        )
+        .expect("write inventory");
+        fs::set_permissions(&inventory, fs::Permissions::from_mode(0o644)).expect("mode");
+
+        let paths = Inventory::api_key_file_paths(&inventory).expect("list api key files");
+        assert_eq!(paths, vec![key_a, key_b]);
     }
 
     #[test]

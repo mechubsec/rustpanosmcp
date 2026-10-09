@@ -2057,6 +2057,7 @@ dependencies = [
  "mecmcp-audit",
  "mecmcp-auth",
  "mecmcp-runtime",
+ "mecmcp-secret",
  "mecmcp-transport",
  "rcgen",
  "reqwest",
