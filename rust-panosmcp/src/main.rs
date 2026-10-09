@@ -1,6 +1,8 @@
 //! Process entrypoint for local stdio and bearer-protected remote MCP.
 
 use clap::Parser;
+use mecmcp_secret::naming::{ServerNaming, known};
+use mecmcp_secret::validate::{CredentialFileRole, CredentialFileSpec, validate_credential_files};
 use rmcp::ServiceExt;
 use rust_panosmcp::{
     PanosMcpServer, RuntimeState,
@@ -11,6 +13,13 @@ use rust_panosmcp::{
 };
 use rust_panosmcp_core::inventory::Inventory;
 use std::net::{IpAddr, SocketAddr};
+use std::path::{Path, PathBuf};
+
+/// Layout for this server. `known::PANOS` is the deployed name
+/// (`rust-panosmcp`), so these paths stay the ones already on disk.
+fn server_naming() -> ServerNaming {
+    ServerNaming::derive(known::PANOS)
+}
 
 /// Scan for stale secret files and warn if any are found.
 ///
@@ -19,9 +28,10 @@ use std::net::{IpAddr, SocketAddr};
 /// stale file should not block startup.
 fn check_stale_secrets(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
     use mecmcp_auth::find_stale_secrets;
-    use std::path::Path;
 
-    // Live files in /etc/rust-panosmcp that should not be flagged as stale.
+    let naming = server_naming();
+
+    // Live files in the config directory that should not be flagged as stale.
     //
     // `tokens.json` IS listed here even though /etc is the legacy location. It has
     // to be: find_stale_secrets classifies a superseded file by its live-name
@@ -38,7 +48,7 @@ fn check_stale_secrets(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
         "tokens.json",
     ];
 
-    // Live files in /var/lib/rust-panosmcp that should not be flagged as stale.
+    // Live files in the state directory that should not be flagged as stale.
     let state_live_files = [
         "tokens.json",
         "mutation-state.json",
@@ -47,20 +57,23 @@ fn check_stale_secrets(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
         "evidence-ledger.ndjson",
     ];
 
-    // Check /etc/rust-panosmcp
+    // Check the config directory. A device-mapping path with no parent falls
+    // back to the deployed config dir; nothing else is substituted.
     let config_dir = cli
         .device_mapping
         .parent()
-        .unwrap_or_else(|| Path::new("/etc/rust-panosmcp"));
-    let config_stale = find_stale_secrets(config_dir, &config_live_files);
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| naming.config_dir.clone());
+    let config_stale = find_stale_secrets(&config_dir, &config_live_files);
 
-    // Check /var/lib/rust-panosmcp
+    // Check the state directory the same way.
     let state_dir = cli
         .state_file
         .as_ref()
         .and_then(|p| p.parent())
-        .unwrap_or_else(|| Path::new("/var/lib/rust-panosmcp"));
-    let state_stale = find_stale_secrets(state_dir, &state_live_files);
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| naming.state_dir.clone());
+    let state_stale = find_stale_secrets(&state_dir, &state_live_files);
 
     // Also check for TLS key if configured
     let mut tls_stale = Vec::new();
@@ -85,11 +98,12 @@ fn check_stale_secrets(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
     // file being maintained.
     // Only when it is NOT the store this process is actually using. A source or
     // Phase 2 deployment may legitimately run with
-    // `--tokens-file /etc/rust-panosmcp/tokens.json`; warning there would tell
-    // an operator to securely erase their live credentials, and following the
-    // advice would leave the next start with no tokens at all. A warning that
+    // `--tokens-file` pointing at the legacy config-dir copy; warning there would
+    // tell an operator to securely erase their live credentials, and following
+    // the advice would leave the next start with no tokens at all. A warning that
     // can destroy a working deployment is worse than the duplicate it reports.
-    let legacy_tokens = Path::new("/etc/rust-panosmcp/tokens.json");
+    // This is a warning only. A missing canonical store is not loaded from here.
+    let legacy_tokens = naming.config_dir.join("tokens.json");
     let configured_is_legacy = cli
         .tokens_file
         .as_deref()
@@ -118,6 +132,75 @@ fn check_stale_secrets(cli: &Cli) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+/// Secret files whose modes are checked together, before any of them is loaded.
+///
+/// A startup that checks one file and exits reports the next loose mode only
+/// on the next restart. [`validate_startup_credentials`] asks `mecmcp-secret`
+/// to report every offender in this list at once.
+///
+/// Custom CA bundles are not here. The inventory loader accepts them on its
+/// own rules; this list is only secret files.
+struct StartupCredentialFiles<'a> {
+    /// File-backed PAN-OS API keys named by the inventory. Each is required.
+    api_key_files: &'a [PathBuf],
+    /// Bearer-token store this process will load. Required when set.
+    ///
+    /// This is the configured `--tokens-file` for Streamable HTTP, never a
+    /// path substituted because the canonical store is missing. stdio does
+    /// not load a token store, so it passes `None` even when the flag is set.
+    tokens: Option<&'a Path>,
+    /// Audit HMAC key. Required when set; the caller creates a missing key first.
+    audit_hmac_key: Option<&'a Path>,
+    /// Listener TLS private key. Required when this process will load it.
+    tls_key: Option<&'a Path>,
+}
+
+/// Check every secret file in one pass.
+///
+/// # Errors
+/// Returns the aggregate [`mecmcp_secret::CredentialValidationError`] when any
+/// listed file is missing or fails its mode check. The error names every
+/// offender.
+fn validate_startup_credentials(
+    files: &StartupCredentialFiles<'_>,
+) -> Result<(), mecmcp_secret::CredentialValidationError> {
+    let mut specs = Vec::with_capacity(files.api_key_files.len() + 3);
+    for path in files.api_key_files {
+        specs.push(CredentialFileSpec {
+            path,
+            role: CredentialFileRole::Secret,
+            description: "PAN-OS API key",
+            required: true,
+        });
+    }
+    if let Some(path) = files.tokens {
+        specs.push(CredentialFileSpec {
+            path,
+            role: CredentialFileRole::Secret,
+            description: "bearer token store",
+            required: true,
+        });
+    }
+    if let Some(path) = files.audit_hmac_key {
+        specs.push(CredentialFileSpec {
+            path,
+            role: CredentialFileRole::Secret,
+            description: "audit HMAC key",
+            required: true,
+        });
+    }
+    if let Some(path) = files.tls_key {
+        specs.push(CredentialFileSpec {
+            path,
+            role: CredentialFileRole::Secret,
+            description: "TLS private key",
+            required: true,
+        });
+    }
+
+    validate_credential_files(&specs)
 }
 
 /// Pre-provision the audit HMAC key file at `path` if it is absent or empty,
@@ -297,9 +380,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
+    // Only the files this process will load. stdio ignores `--tokens-file` and
+    // does not open a listener key; checking those here would refuse a start
+    // that never reads them. There is no fallback when the configured token
+    // path is missing.
     let tokens = (cli.transport == Transport::StreamableHttp)
         .then_some(cli.tokens_file.as_deref())
         .flatten();
+    let tls_key = (cli.transport == Transport::StreamableHttp)
+        .then_some(cli.tls_key.as_deref())
+        .flatten();
+    let api_key_files = Inventory::api_key_file_paths(&cli.device_mapping)?;
+    if let Err(error) = validate_startup_credentials(&StartupCredentialFiles {
+        api_key_files: &api_key_files,
+        tokens,
+        audit_hmac_key: cli.audit_hmac_key_file.as_deref(),
+        tls_key,
+    }) {
+        // `main`'s default reporter prints `Debug`. The useful text is the
+        // aggregate `Display`, which names every loose file at once.
+        eprintln!("Error: {error}");
+        std::process::exit(1);
+    }
+
     // Built before the runtime because the coordinator inside it takes the
     // recorder, and started eagerly so a misconfiguration stops the server here
     // rather than at the first change.
@@ -530,5 +633,93 @@ mod audit_hmac_key_tests {
         let a = std::fs::read(&path_a).unwrap();
         let b = std::fs::read(&path_b).unwrap();
         assert_ne!(a, b, "two generated keys must not collide");
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod startup_credential_tests {
+    use super::{StartupCredentialFiles, server_naming, validate_startup_credentials};
+    use std::path::PathBuf;
+
+    #[test]
+    fn deployed_paths_stay_on_the_rust_panosmcp_layout() {
+        let naming = server_naming();
+        assert_eq!(naming.config_dir, PathBuf::from("/etc/rust-panosmcp"));
+        assert_eq!(naming.state_dir, PathBuf::from("/var/lib/rust-panosmcp"));
+        assert_eq!(naming.service_user, "rust-panosmcp");
+    }
+
+    #[cfg(unix)]
+    fn write_file(dir: &std::path::Path, name: &str, mode: u32) -> PathBuf {
+        use std::io::Write;
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = dir.join(name);
+        let mut file = std::fs::File::create(&path).unwrap();
+        file.write_all(b"{}\n").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+        path
+    }
+
+    /// Two loose modes must come back together. The failure this guards is a
+    /// startup that names the first file, exits, and only names the second
+    /// after that restart.
+    #[cfg(unix)]
+    #[test]
+    fn one_pass_reports_every_bad_mode() {
+        let dir = tempfile::tempdir().unwrap();
+        let api_key_files = vec![write_file(dir.path(), "api-key", 0o644)];
+        let tokens = write_file(dir.path(), "tokens.json", 0o640);
+
+        let error = validate_startup_credentials(&StartupCredentialFiles {
+            api_key_files: &api_key_files,
+            tokens: Some(&tokens),
+            audit_hmac_key: None,
+            tls_key: None,
+        })
+        .expect_err("both files are looser than a secret file allows");
+
+        let message = error.to_string();
+        assert!(
+            message.contains("2 credential file"),
+            "expected both failures in one error, got {message}"
+        );
+        assert!(message.contains("api-key"), "{message}");
+        assert!(message.contains("tokens.json"), "{message}");
+        assert!(message.contains("0644"), "{message}");
+        assert!(message.contains("0640"), "{message}");
+    }
+
+    /// Owner-only secret files pass together, including the HMAC key and the
+    /// listener private key. A missing configured token path is not skipped.
+    #[cfg(unix)]
+    #[test]
+    fn acceptable_modes_pass_and_a_missing_token_store_is_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let api_key_files = vec![write_file(dir.path(), "api-key", 0o600)];
+        let tokens = write_file(dir.path(), "tokens.json", 0o600);
+        let hmac = write_file(dir.path(), "audit-hmac.key", 0o600);
+        let tls = write_file(dir.path(), "server.key", 0o600);
+
+        validate_startup_credentials(&StartupCredentialFiles {
+            api_key_files: &api_key_files,
+            tokens: Some(&tokens),
+            audit_hmac_key: Some(&hmac),
+            tls_key: Some(&tls),
+        })
+        .expect("0600 secret files pass together");
+
+        let missing = dir.path().join("missing-tokens.json");
+        let error = validate_startup_credentials(&StartupCredentialFiles {
+            api_key_files: &[],
+            tokens: Some(&missing),
+            audit_hmac_key: None,
+            tls_key: None,
+        })
+        .expect_err("a missing configured token store is an error");
+        let message = error.to_string();
+        assert!(message.contains("missing-tokens.json"), "{message}");
+        assert!(message.contains("1 credential file"), "{message}");
     }
 }

@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The container image is published for `linux/amd64` only; the `linux/arm64`
   build is dropped.
+- Startup reports every credential-file mode problem in one pass. On-disk
+  paths stay `/etc/rust-panosmcp` and `/var/lib/rust-panosmcp`. The process
+  still loads only the configured `--tokens-file`; a stale copy under `/etc`
+  remains a warning, and a missing canonical store is not substituted.
 
 ## [0.16.0] - 2026-10-07
 
