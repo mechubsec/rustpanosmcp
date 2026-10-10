@@ -641,6 +641,98 @@ async fn lab_mode_waived_change_set_applies_without_an_approver() {
     );
 }
 
+/// A lab-mode waiver is an approval only while the deployment is currently
+/// in lab mode. If the service restarts with lab mode off -- a guest
+/// promoted out of `--lab-mode` to two-person mode -- a change set that was
+/// only ever auto-waived, never approved by a human, must not apply.
+#[tokio::test]
+async fn lab_mode_waiver_does_not_apply_after_restart_without_lab_mode() {
+    let mut fixture = fixture_with_options(false, false, true, true).await;
+    let initial = fixture
+        .service
+        .candidate_fingerprint(
+            CandidateFingerprintInput {
+                device: "mock-fw".to_owned(),
+            },
+            None,
+            CancellationToken::new(),
+        )
+        .await
+        .expect("fingerprint");
+    let grant = MutationGrant {
+        allowed_xpath_roots: vec!["/config/shared/address".to_owned()],
+        actions: vec![MutationAction::Set, MutationAction::Delete],
+    };
+    let planned = fixture
+        .service
+        .create_change_set(
+            CreateChangeSetInput {
+                device: "mock-fw".to_owned(),
+                expected_candidate_fingerprint: initial.candidate_fingerprint.clone(),
+                actions: vec![ChangeSetAction {
+                    action: StageAction::Set,
+                    xpath: "/config/shared/address".to_owned(),
+                    element: Some(
+                        "<entry name=\"one\"><ip-netmask>192.0.2.1</ip-netmask></entry>".to_owned(),
+                    ),
+                    destructive_confirmation: None,
+                    move_position: None,
+                    move_destination: None,
+                }],
+            },
+            None,
+            "writer",
+            Some(&grant),
+            CancellationToken::new(),
+        )
+        .await
+        .expect("lab-mode auto-approval");
+    assert_eq!(planned.approval_waiver.as_deref(), Some("lab-mode"));
+
+    recovered_service(&mut fixture);
+
+    let apply = ApplyChangeSetInput {
+        device: "mock-fw".to_owned(),
+        change_set_id: planned.change_set_id.clone(),
+        expected_digest: planned.digest,
+        expected_candidate_fingerprint: initial.candidate_fingerprint,
+    };
+    let result = fixture
+        .service
+        .apply_change_set(
+            apply,
+            None,
+            "writer",
+            Some(&grant),
+            CancellationToken::new(),
+        )
+        .await;
+
+    let err = result
+        .expect_err("a lab-mode waiver must not satisfy independent approval once lab mode is off");
+    assert!(
+        err.to_string().contains("requires independent approval"),
+        "got: {err}"
+    );
+
+    let status = fixture
+        .service
+        .change_set_status(
+            ChangeSetStatusInput {
+                device: "mock-fw".to_owned(),
+                change_set_id: planned.change_set_id,
+            },
+            None,
+        )
+        .await
+        .expect("status");
+    assert_eq!(
+        status.state, "approved",
+        "the change set must remain unapplied"
+    );
+    assert_eq!(status.operation_id, None);
+}
+
 /// House rule: a human approves. An agent principal -- distinct from the
 /// owner, so separation of duties alone would let this through -- must still
 /// be refused as the second approver.

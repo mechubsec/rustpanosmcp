@@ -114,10 +114,13 @@ fn extract_xpath(record: &OperationRecord) -> Option<String> {
 /// Lab mode's auto-approval (see `create_panos_change_set`) records
 /// `approval.waived` rather than inventing an `approver`, so a check that
 /// only looks at `approver` treats every lab-mode change set as unapproved
-/// and locks out apply under `--lab-mode` (MEC-2687).
-fn change_set_is_independently_approved(change_set: &ChangeSetRecord) -> bool {
+/// and locks out apply under `--lab-mode` (MEC-2687). A waiver counts only
+/// while this deployment is currently in lab mode, so a change set waived
+/// before a mode switch to two-person mode does not apply without a real
+/// approver.
+fn change_set_is_independently_approved(change_set: &ChangeSetRecord, lab_mode: bool) -> bool {
     match &change_set.approval {
-        Some(approval) => approval.approver.is_some() || approval.waived.is_some(),
+        Some(approval) => approval.approver.is_some() || (lab_mode && approval.waived.is_some()),
         None => change_set.approver.is_some(),
     }
 }
@@ -856,7 +859,7 @@ impl PanosService {
             ));
         }
         if change_set.state != ChangeSetState::Approved
-            || !change_set_is_independently_approved(&change_set)
+            || !change_set_is_independently_approved(&change_set, self.mutations.lab_mode())
         {
             return Err(policy(
                 "change_set_id",
@@ -904,7 +907,7 @@ impl PanosService {
             .await?;
         if change_set.owner != owner
             || change_set.state != ChangeSetState::Approved
-            || !change_set_is_independently_approved(&change_set)
+            || !change_set_is_independently_approved(&change_set, self.mutations.lab_mode())
             || change_set.digest != input.expected_digest
             || change_set.expected_candidate_fingerprint != input.expected_candidate_fingerprint
             || now_unix()? >= change_set.expires_at_unix
