@@ -102,6 +102,12 @@ else:
     for arg in pkg.get("packageArguments") or []:
         if arg.get("name") in banned:
             errors.append(f"package argument repeats entrypoint flag {arg.get('name')}")
+compose = (root / "packaging/container/compose.example.yaml").read_text()
+compose_expect = f"ghcr.io/mechubsec/rustpanosmcp:{version}"
+compose_match = re.search(r'(?m)^\s*image:\s*(\S+)$', compose)
+if not compose_match or compose_match.group(1) != compose_expect:
+    found = compose_match.group(1) if compose_match else None
+    errors.append(f"compose.example.yaml image {found!r} != {compose_expect}")
 if errors:
     print("server.json: " + "; ".join(errors), file=sys.stderr)
     sys.exit(1)

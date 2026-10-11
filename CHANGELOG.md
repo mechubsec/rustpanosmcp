@@ -7,10 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-10-11
+
 ### Added
 
 - Official MCP Registry metadata: `server.json` for the stdio container
   invocation, and the `io.modelcontextprotocol.server.name` image label.
+- Release tarballs are signed (keyless cosign, via mecmcp's reusable
+  workflow) and attached to the GitHub release; a `workflow_dispatch` path
+  can backfill the asset onto an already-published release.
+- Release container images are now dual-published to Docker Hub alongside
+  GHCR.
 
 ### Changed
 
@@ -20,6 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   paths stay `/etc/rust-panosmcp` and `/var/lib/rust-panosmcp`. The process
   still loads only the configured `--tokens-file`; a stale copy under `/etc`
   remains a warning, and a missing canonical store is not substituted.
+- Installer file and directory handling now matches the packaged tmpfiles
+  policy more closely.
+
+### Fixed
+
+- `apply_panos_change_set` recognizes a lab-mode-waived change set (approved
+  with no named approver, per documented lab-mode behavior) instead of
+  refusing it at apply.
 
 ## [0.16.0] - 2026-10-07
 
