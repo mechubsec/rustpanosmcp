@@ -44,6 +44,8 @@ zeroize.workspace = true
 # Integration tests use mecmcp_transport::test_harness, which mecmcp >= 0.24 gates
 # behind `test-util`. Enabled here only (never on the normal dependency).
 mecmcp-transport = { workspace = true, features = ["test-util"] }
+# Test-only: the shared CLI refusal fixtures live behind `test-util`.
+mecmcp-runtime = { workspace = true, features = ["test-util"] }
 rcgen = "0.14"
 reqwest.workspace = true
 rmcp = { workspace = true, features = ["client", "server", "transport-io", "transport-streamable-http-client-reqwest"] }
