@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.2] - 2026-10-15
+
+### Added
+
+- Releases are now published to the official MCP Registry
+  (`io.github.mechubsec/rustpanosmcp`) from the tag-triggered release
+  workflow, using GitHub OIDC. (#254)
+
+### Changed
+
+- Release workflows reference the mecmcp v0.28.1 reusable workflows. (#255)
+- Startup refusal wording is pinned against the shared validator fixtures. (#257)
+
 ## [0.16.1] - 2026-10-11
 
 ### Added
