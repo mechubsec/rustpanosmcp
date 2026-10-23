@@ -25,6 +25,18 @@ for bad in '' 'abc123' "${commit^^}"; do
     fi
 done
 
+# Negative: a binary whose --version disagrees with the source commit's Cargo.toml
+# must be refused, or an old binary ships under a new version's name.
+mkdir -p "$work/stub/release"
+printf '#!/bin/sh\necho "rust-panosmcp 0.0.0-stub"\n' >"$work/stub/release/rust-panosmcp"
+chmod +x "$work/stub/release/rust-panosmcp"
+if PANOSMCP_ALLOW_DIRTY=1 PANOSMCP_PACKAGE_SKIP_BUILD=1 PANOSMCP_TARGET_DIR="$work/stub" \
+    PANOSMCP_BINARY_SOURCE_COMMIT="$commit" PANOSMCP_OUTPUT_DIR="$work/neg" \
+    scripts/build-release.sh >/dev/null 2>&1; then
+    echo 'skip-build accepted a binary whose --version disagrees with the source commit' >&2
+    exit 1
+fi
+
 PANOSMCP_ALLOW_DIRTY=1 PANOSMCP_PACKAGE_SKIP_BUILD=1 \
 PANOSMCP_BINARY_SOURCE_COMMIT="$commit" PANOSMCP_OUTPUT_DIR="$work/out" \
     scripts/build-release.sh >/dev/null

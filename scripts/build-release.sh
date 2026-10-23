@@ -41,8 +41,25 @@ if [[ "$SKIP_BUILD" == "1" ]]; then
         echo "commit $PANOSMCP_BINARY_SOURCE_COMMIT is not in this clone; run: git fetch origin $PANOSMCP_BINARY_SOURCE_COMMIT" >&2
         exit 1
     fi
-    TOOLCHAIN_CHANNEL="$(sed -n 's/^channel *= *"\([^"]*\)".*/\1/p' rust-toolchain.toml 2>/dev/null | head -n 1)"
-    RUSTC_LINE="unknown (binary supplied prebuilt via PANOSMCP_PACKAGE_SKIP_BUILD; pinned toolchain ${TOOLCHAIN_CHANNEL:-unspecified} at ${COMMIT:0:12}; not compiled by this script)"
+    # Version and toolchain pin describe the binary, so read them at its source
+    # commit, not from this checkout, and refuse a binary that disagrees.
+    VERSION="$(git show "$COMMIT:Cargo.toml" | sed -n 's/^version = "\([^"]*\)"/\1/p' | head -n 1)"
+    # shortcut: executes the binary, so packaging must run on a host that can run it
+    # (the fleet and packaging hosts are x86_64 Linux); fails closed otherwise.
+    BINARY_VERSION="$("$TARGET_DIR/release/rust-panosmcp" --version | awk '{print $2}')" || {
+        echo "cannot run $TARGET_DIR/release/rust-panosmcp to verify its version; package on a host that can execute it" >&2
+        exit 1
+    }
+    if [[ -z "$VERSION" || "$BINARY_VERSION" != "$VERSION" ]]; then
+        echo "binary reports version '$BINARY_VERSION' but ${COMMIT:0:12} declares '$VERSION'; wrong binary or wrong PANOSMCP_BINARY_SOURCE_COMMIT" >&2
+        exit 1
+    fi
+    TOOLCHAIN_CHANNEL="$(git show "$COMMIT:rust-toolchain.toml" 2>/dev/null | sed -n 's/^channel *= *"\([^"]*\)".*/\1/p' | head -n 1)"
+    if [[ -z "$TOOLCHAIN_CHANNEL" ]]; then
+        echo "no toolchain channel in rust-toolchain.toml at ${COMMIT:0:12}" >&2
+        exit 1
+    fi
+    RUSTC_LINE="unknown (binary supplied prebuilt via PANOSMCP_PACKAGE_SKIP_BUILD; pinned toolchain $TOOLCHAIN_CHANNEL at ${COMMIT:0:12}; not compiled by this script)"
 else
     COMMIT="$PACKAGING_COMMIT"
     TARGET_TRIPLE="${PANOSMCP_TARGET_TRIPLE:-$(rustc -vV | sed -n 's/^host: //p')}"
