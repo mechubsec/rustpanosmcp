@@ -16,6 +16,28 @@ tar -xzf rust-panosmcp-v0.16.2-x86_64-unknown-linux-gnu.tar.gz
 cat rust-panosmcp-v0.16.2/BUILD-INFO
 ```
 
+`BUILD-INFO` is `key=value` lines: `version`, `git_commit` (the commit that
+built the binary), `packaging_commit` (the checkout that produced the
+archive; equal unless the binary was supplied prebuilt), `source_date_epoch`,
+`target`, `binary_sha256` (of `bin/rust-panosmcp`) and a single `rustc=` line.
+
+### Packaging a CI-built binary
+
+A binary rebuilt on a workstation links a newer glibc than the LXCs have and
+will not start there. Package the binary CI built instead: extract it from the
+release image to `target/release/rust-panosmcp`, then
+
+```bash
+PANOSMCP_PACKAGE_SKIP_BUILD=1 \
+PANOSMCP_BINARY_SOURCE_COMMIT=<40-hex commit that built the image> \
+    scripts/build-release.sh
+```
+
+The commit must exist in the clone (`git fetch origin <sha>`). `rustc=` is then
+recorded as `unknown (... not compiled by this script)`, never a toolchain
+version, and `target` defaults to `x86_64-unknown-linux-gnu`
+(`PANOSMCP_TARGET_TRIPLE` overrides). Never hand-write `BUILD-INFO`.
+
 The build uses `Cargo.lock`, a fixed Rust MSRV, path remapping, a fixed source
 date, deterministic tar ordering/ownership/timestamps, and no incremental
 compilation. `scripts/verify-reproducible-build.sh` compiles twice in isolated

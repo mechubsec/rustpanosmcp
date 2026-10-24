@@ -128,16 +128,16 @@ jobs:
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build the release binary
-        run: cargo build --release --locked --bin rust-panosmcp
-
-      - name: Stage the package
+      - name: Build and stage the package
         run: |
           set -euo pipefail
-          mkdir -p staging/bin
-          cp target/release/rust-panosmcp staging/bin/
-          cp -r packaging staging/packaging
+          PANOSMCP_OUTPUT_DIR="$RUNNER_TEMP/pkg" scripts/build-release.sh
+          mkdir staging
+          tar -xzf "$RUNNER_TEMP"/pkg/rust-panosmcp-v*.tar.gz -C staging --strip-components=1
           cp packaging/conformance.toml staging/
+
+      - name: Skip-build provenance stays honest
+        run: packaging/tests/skip-build-provenance.sh
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v4

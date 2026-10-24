@@ -4,10 +4,12 @@ service    = "rust-panosmcp"
 config_dir = "/etc/rust-panosmcp"
 tokens     = "/var/lib/rust-panosmcp/tokens.json"
 
-# No supported skip-build path yet, so no honest BUILD-INFO is possible.
-# R3 warns until both change together. See mecmcp's spec, "Provenance ordering".
-build_info     = false
-skip_build_env = false
+# rust-panosmcp has a supported skip-build path (PANOSMCP_PACKAGE_SKIP_BUILD)
+# and scripts/build-release.sh emits an honest BUILD-INFO either way -- a real
+# rustc -vV when it compiled the binary, "unknown (...)" when it did not. R3 is
+# therefore fatal rather than a warning. See mecmcp#355.
+build_info     = true
+skip_build_env = "PANOSMCP_PACKAGE_SKIP_BUILD"
 
 units = ["packaging/systemd/rust-panosmcp.service"]
 
