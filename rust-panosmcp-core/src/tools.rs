@@ -2,17 +2,19 @@
 
 use crate::{
     PanosMcpError, Result,
-    client::PanosClient,
+    client::{EdlType, EdlVerb, PanosClient, validate_edl_name},
     inventory::{DeviceMetadata, Inventory},
     observability::AuditScope,
     xml::{
-        ConfigEntry, ContentVersionEntry, DeviceFacts, DeviceGroupSummary, HaState, JobStatus,
-        LicenseEntry, PushDeviceStatus, SoftwareVersionEntry, TemplateSummary,
-        collect_text_for_elements, op_command_tag_path, panos_api_code_name, parse_content_entries,
-        parse_device_facts, parse_ha_state, parse_job_id, parse_license_entries, parse_log_entries,
-        parse_panorama_device_groups_op, parse_panorama_templates_op, parse_push_job_status,
-        parse_security_policy_match, parse_software_entries, scan_config_entries,
-        validate_read_only_op_command, validate_read_xpath,
+        ConfigEntry, ContentVersionEntry, DeviceFacts, DeviceGroupSummary, EdlFeedKind,
+        EdlLastEvent, HaState, JobStatus, LicenseEntry, PushDeviceStatus, SoftwareVersionEntry,
+        TemplateSummary, collect_text_for_elements, edl_content_etag, op_command_tag_path,
+        panos_api_code_name, parse_content_entries, parse_device_facts, parse_edl_content,
+        parse_edl_feed_config, parse_edl_last_event, parse_edl_stats, parse_ha_state, parse_job_id,
+        parse_license_entries, parse_log_entries, parse_panorama_device_groups_op,
+        parse_panorama_templates_op, parse_push_job_status, parse_security_policy_match,
+        parse_software_entries, scan_config_entries, validate_read_only_op_command,
+        validate_read_xpath,
     },
 };
 use mecmcp_policy::{
@@ -1071,6 +1073,140 @@ impl PanosService {
         result
     }
 
+    /// Read status of mecfeedmcp feeds (PAN-OS external dynamic lists).
+    ///
+    /// Reads the running `external-list` config, keeps the entries whose URL
+    /// is a mecfeedmcp feed path, then asks PAN-OS for each one's stats,
+    /// members, and newest system-log event. No matching entry (or no
+    /// `external-list` node at all) is `feeds: []`, i.e. not subscribed.
+    pub async fn get_panos_feed_status(
+        &self,
+        input: GetPanosFeedStatusInput,
+        ctx: Option<&CallerContext>,
+        cancellation: CancellationToken,
+    ) -> Result<GetPanosFeedStatusOutput> {
+        let mut audit = match ctx {
+            Some(ctx) => AuditScope::from_caller(
+                ctx,
+                "get_panos_feed_status",
+                "feed-status",
+                vec![input.device.clone()],
+            ),
+            None => AuditScope::stdio(
+                "get_panos_feed_status",
+                "feed-status",
+                vec![input.device.clone()],
+            ),
+        };
+        let result = async {
+            let client = self.client(&input.device)?;
+            // shortcut: inventory vsys only; shared and Panorama-pushed EDLs are not read, add when a deployment uses them
+            let vsys = self
+                .inventory
+                .device(&input.device)?
+                .metadata
+                .vsys
+                .clone()
+                .unwrap_or_else(default_vsys);
+            validate_vsys_name(&vsys)?;
+            let xpath = format!(
+                "/config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='{vsys}']/external-list"
+            );
+            self.check_xpath_policy(&input.device, &xpath)?;
+
+            let (bytes, truncated) = client
+                .configuration_entries(false, &xpath, cancellation.clone())
+                .await?;
+            // A cut response would read as fewer (or no) feeds; refuse instead.
+            if truncated {
+                return Err(PanosMcpError::Xml(
+                    "external-list config response was truncated".to_owned(),
+                ));
+            }
+            let scan = scan_config_entries(&bytes, 0, usize::MAX, LIST_CONTAINER_ENTRY_DEPTH)?;
+            match ensure_scan_success(&input.device, &bytes, &scan) {
+                Ok(()) => {}
+                // A missing node is how PAN-OS answers "no EDLs configured".
+                Err(PanosMcpError::Api { message, .. }) if message == "No such node" => {
+                    return Ok(GetPanosFeedStatusOutput {
+                        device: input.device,
+                        feeds: Vec::new(),
+                    });
+                }
+                Err(error) => return Err(error),
+            }
+
+            let mut feeds = Vec::new();
+            for entry in &scan.entries {
+                let Some(config) = parse_edl_feed_config(entry)? else {
+                    continue;
+                };
+                validate_edl_name(&config.name)?;
+                let edl_type = match config.kind {
+                    EdlFeedKind::Domain => EdlType::Domain,
+                    EdlFeedKind::Address | EdlFeedKind::Prefix => EdlType::Ip,
+                };
+                let stats = parse_edl_stats(
+                    &client
+                        .edl_op(EdlVerb::Stats, edl_type, &config.name, cancellation.clone())
+                        .await?,
+                )?;
+                let content = parse_edl_content(
+                    &client
+                        .edl_op(EdlVerb::Show, edl_type, &config.name, cancellation.clone())
+                        .await?,
+                )?;
+                // `config.name` passed `validate_edl_name` above, so it
+                // cannot break out of the quoted filter value.
+                let submitted = client
+                    .post_fields(
+                        vec![
+                            ("type", "log".to_owned()),
+                            ("log-type", "system".to_owned()),
+                            ("nlogs", "1".to_owned()),
+                            (
+                                "query",
+                                format!("(description contains 'EDL({})')", config.name),
+                            ),
+                        ],
+                        cancellation.clone(),
+                    )
+                    .await?;
+                let job_id = parse_job_id(&submitted)?;
+                let finished = client
+                    .poll_log_job(&job_id, LOG_JOB_DEADLINE, cancellation.clone())
+                    .await?;
+                let mut events = parse_log_entries(&finished)?;
+                for event in &mut events {
+                    event.xml = crate::redact::redact_device_xml(&event.xml);
+                }
+                feeds.push(FeedStatus {
+                    name: config.name,
+                    kind: config.kind,
+                    url: config.url,
+                    valid: stats.valid,
+                    auth_valid: stats.auth_valid,
+                    next_update: stats.next_update,
+                    total_valid: content.total_valid,
+                    total_ignored: content.total_ignored,
+                    total_invalid: content.total_invalid,
+                    content_etag: edl_content_etag(&content),
+                    last_event: parse_edl_last_event(&events)?,
+                });
+            }
+            Ok(GetPanosFeedStatusOutput {
+                device: input.device,
+                feeds,
+            })
+        }
+        .await;
+        match &result {
+            Ok(_) => audit.succeed(),
+            Err(e) => audit.fail(e),
+        }
+        result
+    }
+
     /// Read software version status via `request system software info`.
     pub async fn get_panos_software_status(
         &self,
@@ -1657,6 +1793,51 @@ pub struct GetPanosContentStatusOutput {
     pub versions: Vec<ContentVersionEntry>,
 }
 
+/// Input for `get_panos_feed_status`.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GetPanosFeedStatusInput {
+    /// Exact inventory device name.
+    pub device: String,
+}
+
+/// Status of one mecfeedmcp feed subscribed as a PAN-OS external list.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+pub struct FeedStatus {
+    /// External-list object name.
+    pub name: String,
+    /// Feed kind, from the configured URL path and EDL type.
+    pub kind: EdlFeedKind,
+    /// Configured feed URL with any credentials removed.
+    pub url: String,
+    /// PAN-OS reports the list as valid.
+    pub valid: bool,
+    /// PAN-OS reports the list's authentication as valid.
+    pub auth_valid: bool,
+    /// Next scheduled refresh, as PAN-OS formats it.
+    pub next_update: String,
+    /// Entries PAN-OS accepted.
+    pub total_valid: u64,
+    /// Entries PAN-OS ignored.
+    pub total_ignored: u64,
+    /// Entries PAN-OS rejected as invalid.
+    pub total_invalid: u64,
+    /// ETag mecfeed-serve would send for the list PAN-OS holds, or `None`
+    /// when PAN-OS's member list does not match its own valid count.
+    pub content_etag: Option<String>,
+    /// Newest EDL system-log event, if any.
+    pub last_event: Option<EdlLastEvent>,
+}
+
+/// Result of `get_panos_feed_status`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+pub struct GetPanosFeedStatusOutput {
+    /// Exact inventory device name.
+    pub device: String,
+    /// One entry per subscribed feed; empty when the device is not subscribed.
+    pub feeds: Vec<FeedStatus>,
+}
+
 /// Input for `get_panos_software_status`.
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -2196,6 +2377,16 @@ fn bounded_text(input: &str, limits: OutputLimits) -> BoundedText {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn edl_name_validation() {
+        for bad in ["a'b", "a<b", "a\"b", "", &"a".repeat(64)] {
+            assert!(validate_edl_name(bad).is_err(), "{bad:?} must be rejected");
+        }
+        for good in ["mms-blocklist", "a b.c_d", &"a".repeat(63)] {
+            assert!(validate_edl_name(good).is_ok(), "{good:?} must be accepted");
+        }
+    }
 
     #[test]
     fn output_is_utf8_safe_and_reports_truncation() {

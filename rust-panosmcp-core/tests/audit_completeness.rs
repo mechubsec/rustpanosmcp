@@ -22,10 +22,11 @@ use rust_panosmcp_core::{
     tools::{
         ConfigSource, ExecutePanosOpInput, GatherDeviceFactsInput, GetPanoramaPushStatusInput,
         GetPanosConfigInput, GetPanosContentStatusInput, GetPanosEntryDigestInput,
-        GetPanosHaStateInput, GetPanosLicenseInfoInput, GetPanosSoftwareStatusInput, IpProtocol,
-        ListPanoramaDeviceGroupsInput, ListPanoramaTemplatesInput, ListPanosEntriesInput,
-        ListPanosRulebaseEntriesInput, PanosLogType, PanosService, QueryPanosLogsInput,
-        RulebaseKind, TestPanosSecurityPolicyMatchInput,
+        GetPanosFeedStatusInput, GetPanosHaStateInput, GetPanosLicenseInfoInput,
+        GetPanosSoftwareStatusInput, IpProtocol, ListPanoramaDeviceGroupsInput,
+        ListPanoramaTemplatesInput, ListPanosEntriesInput, ListPanosRulebaseEntriesInput,
+        PanosLogType, PanosService, QueryPanosLogsInput, RulebaseKind,
+        TestPanosSecurityPolicyMatchInput,
     },
 };
 use std::{
@@ -488,6 +489,16 @@ async fn all_tools_emit_audit_events() {
     let _ = service
         .get_panos_content_status(
             GetPanosContentStatusInput {
+                device: "test-fw".to_owned(),
+            },
+            None,
+            cancel.clone(),
+        )
+        .await;
+
+    let _ = service
+        .get_panos_feed_status(
+            GetPanosFeedStatusInput {
                 device: "test-fw".to_owned(),
             },
             None,

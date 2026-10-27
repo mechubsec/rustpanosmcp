@@ -848,6 +848,226 @@ pub fn parse_content_entries(response: &PanosResponse) -> Result<Vec<ContentVers
         .collect()
 }
 
+/// Which mecfeedmcp feed an external-list entry subscribes to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum EdlFeedKind {
+    /// `/feeds/panos-edl/address` on an `ip` external list.
+    Address,
+    /// `/feeds/panos-edl/prefix` on an `ip` external list.
+    Prefix,
+    /// `/feeds/panos-edl/domain` on a `domain` external list.
+    Domain,
+}
+
+/// One external-list config entry that points at a mecfeedmcp feed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EdlFeedConfig {
+    /// EDL object name.
+    pub name: String,
+    /// Feed served at the URL.
+    pub kind: EdlFeedKind,
+    /// Feed URL with any `userinfo@` removed.
+    pub url: String,
+}
+
+/// Classify one running-config `<entry>` of `external-list`.
+///
+/// Returns `None` for anything that is not a mecfeedmcp feed: a `url`-type
+/// EDL, a foreign URL, or a feed path that does not match the EDL type
+/// (`domain` on an `ip` list and vice versa).
+pub fn parse_edl_feed_config(entry: &ConfigEntry) -> Result<Option<EdlFeedConfig>> {
+    let raw = entry.xml.as_bytes();
+    let mut reader = Reader::from_reader(raw);
+    reader.config_mut().trim_text(true);
+    // The first element opened under `<type>` names the EDL type.
+    let mut after_type_start = false;
+    let mut edl_type: Option<String> = None;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(element)) => {
+                let name = element.name().as_ref().to_owned();
+                if after_type_start {
+                    edl_type = Some(name);
+                    break;
+                }
+                after_type_start = name == "type";
+            }
+            Ok(Event::DocType(_)) => {
+                return Err(PanosMcpError::Xml(
+                    "DOCTYPE declarations are forbidden".to_owned(),
+                ));
+            }
+            Ok(Event::Eof) => break,
+            Ok(_) => after_type_start = false,
+            Err(error) => return Err(PanosMcpError::Xml(error.to_string())),
+        }
+    }
+    let Some(edl_type) = edl_type else {
+        return Ok(None);
+    };
+    let Some(raw_url) = first_element_text(raw, b"url")? else {
+        return Ok(None);
+    };
+    let Ok(mut parsed) = url::Url::parse(&raw_url) else {
+        return Ok(None);
+    };
+    let kind = match (
+        edl_type.as_str(),
+        parsed.path().rsplit_once("/feeds/panos-edl/"),
+    ) {
+        ("ip", Some((_, "address"))) => EdlFeedKind::Address,
+        ("ip", Some((_, "prefix"))) => EdlFeedKind::Prefix,
+        ("domain", Some((_, "domain"))) => EdlFeedKind::Domain,
+        _ => return Ok(None),
+    };
+    // Credentials, query and fragment in the URL must never reach tool output.
+    let _ = parsed.set_username("");
+    let _ = parsed.set_password(None);
+    parsed.set_query(None);
+    parsed.set_fragment(None);
+    Ok(Some(EdlFeedConfig {
+        name: entry.name.clone(),
+        kind,
+        url: parsed.to_string(),
+    }))
+}
+
+/// Fields of `request system external-list stats` this tool reports.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EdlStats {
+    /// Next scheduled refresh, as PAN-OS formats it (whitespace trimmed).
+    pub next_update: String,
+    /// Whether PAN-OS considers the list valid.
+    pub valid: bool,
+    /// Whether PAN-OS considers the list's authentication valid.
+    pub auth_valid: bool,
+}
+
+/// Parse a successful external-list `stats` response.
+pub fn parse_edl_stats(response: &PanosResponse) -> Result<EdlStats> {
+    let raw = response.xml.as_bytes();
+    let yes = |name: &[u8]| {
+        Ok::<_, PanosMcpError>(first_element_text(raw, name)?.as_deref() == Some("Yes"))
+    };
+    Ok(EdlStats {
+        next_update: first_element_text(raw, b"next-update")?.unwrap_or_default(),
+        valid: yes(b"valid")?,
+        auth_valid: yes(b"auth-valid")?,
+    })
+}
+
+/// Fields of `request system external-list show` this tool reports.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EdlContent {
+    /// Entries PAN-OS accepted.
+    pub total_valid: u64,
+    /// Entries PAN-OS ignored.
+    pub total_ignored: u64,
+    /// Entries PAN-OS rejected as invalid.
+    pub total_invalid: u64,
+    /// The `<member>` elements of `<valid-members>`.
+    pub members: Vec<String>,
+}
+
+/// Parse a successful external-list `show` response.
+pub fn parse_edl_content(response: &PanosResponse) -> Result<EdlContent> {
+    let raw = response.xml.as_bytes();
+    let count = |name: &'static [u8]| -> Result<u64> {
+        first_element_text(raw, name)?
+            .and_then(|text| text.parse().ok())
+            .ok_or_else(|| {
+                PanosMcpError::Xml(format!(
+                    "external-list response has no numeric <{}>",
+                    String::from_utf8_lossy(name)
+                ))
+            })
+    };
+    Ok(EdlContent {
+        total_valid: count(b"total-valid")?,
+        total_ignored: count(b"total-ignored")?,
+        total_invalid: count(b"total-invalid")?,
+        members: collect_member_texts(raw)?,
+    })
+}
+
+fn collect_member_texts(raw: &[u8]) -> Result<Vec<String>> {
+    let mut reader = Reader::from_reader(raw);
+    reader.config_mut().trim_text(true);
+    let mut members = Vec::new();
+    let mut inside_member = false;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(element)) if element.name().as_ref() == "member" => {
+                inside_member = true;
+                members.push(String::new());
+            }
+            Ok(Event::Empty(element)) if element.name().as_ref() == "member" => {
+                members.push(String::new());
+            }
+            Ok(Event::Text(text)) if inside_member => {
+                if let Some(member) = members.last_mut() {
+                    member.push_str(&text);
+                    guard_extracted_len(member)?;
+                }
+            }
+            Ok(Event::End(element)) if element.name().as_ref() == "member" => {
+                inside_member = false;
+            }
+            Ok(Event::DocType(_)) => {
+                return Err(PanosMcpError::Xml(
+                    "DOCTYPE declarations are forbidden".to_owned(),
+                ));
+            }
+            Ok(Event::Eof) => return Ok(members),
+            Ok(_) => {}
+            Err(error) => return Err(PanosMcpError::Xml(error.to_string())),
+        }
+    }
+}
+
+/// Recompute the content ETag mecfeed-serve would send for this list.
+///
+/// `"sha256-" + hex(sha256(body))`, where body is the valid members sorted by
+/// byte order, each followed by `\n` (the empty list hashes the empty
+/// string). `None` when the member count differs from `total_valid`, which
+/// means the list PAN-OS reported is not the list it counted.
+#[must_use]
+pub fn edl_content_etag(content: &EdlContent) -> Option<String> {
+    if content.members.len() as u64 != content.total_valid {
+        return None;
+    }
+    let mut sorted: Vec<&str> = content.members.iter().map(String::as_str).collect();
+    sorted.sort_unstable();
+    let mut hasher = Sha256::new();
+    for member in sorted {
+        hasher.update(member.as_bytes());
+        hasher.update(b"\n");
+    }
+    Some(format!("sha256-{}", hex_digest(&hasher.finalize())))
+}
+
+/// Newest EDL system-log event for one feed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema)]
+pub struct EdlLastEvent {
+    /// `time_generated` of the log entry, as PAN-OS formats it.
+    pub time: String,
+    /// The entry's `opaque` message, treated as opaque text.
+    pub message: String,
+}
+
+/// Extract the single newest event from a bounded system-log read.
+pub fn parse_edl_last_event(entries: &[ConfigEntry]) -> Result<Option<EdlLastEvent>> {
+    let Some(entry) = entries.first() else {
+        return Ok(None);
+    };
+    let raw = entry.xml.as_bytes();
+    Ok(Some(EdlLastEvent {
+        time: first_element_text(raw, b"time_generated")?.unwrap_or_default(),
+        message: first_element_text(raw, b"opaque")?.unwrap_or_default(),
+    }))
+}
+
 /// Parse every `<entry>` in a successful `request system software info` response.
 pub fn parse_software_entries(response: &PanosResponse) -> Result<Vec<SoftwareVersionEntry>> {
     let raw = response.xml.as_bytes();
@@ -1795,6 +2015,155 @@ pub(crate) fn collect_text_for_elements(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const EDL_STATS_FIXTURE: &str = "<response status=\"success\">\n  <result total-count=\"1\" count=\"1\">\n<external-list><vsys>vsys1</vsys><name>mms-blocklist</name><next-update>Tue Oct 27 21:02:16 2026\n</next-update><source>http://192.168.1.206/blocklist.txt</source><referenced>Yes</referenced><valid>Yes</valid><auth-valid>Yes</auth-valid></external-list>\n  </result>\n</response>";
+    const EDL_SHOW_FIXTURE: &str = r#"<response cmd="status" status="success"><result total-count="1" count="1"><external-list><vsys>(null)</vsys><name>mms-blocklist</name><total-valid>1</total-valid><total-ignored>0</total-ignored><total-invalid>0</total-invalid><valid-members><member>8.8.8.8</member></valid-members></external-list></result></response>"#;
+    const EDL_ERROR_FIXTURE: &str = r#"<response status="error" code="17"><msg><line><![CDATA[ no-such-edl-probe is invalid name.Current target-vsys is none]]></line><line><![CDATA[ request -> system -> external-list -> show -> type -> ip -> name is invalid]]></line></msg></response>"#;
+
+    fn edl_response(xml: &str) -> PanosResponse {
+        parse_panos_response(xml.as_bytes(), XmlLimits::default()).expect("response")
+    }
+
+    #[test]
+    fn edl_stats_and_show_fixtures_parse() {
+        let stats = parse_edl_stats(&edl_response(EDL_STATS_FIXTURE)).expect("stats");
+        assert_eq!(
+            stats,
+            EdlStats {
+                next_update: "Tue Oct 27 21:02:16 2026".to_owned(),
+                valid: true,
+                auth_valid: true,
+            }
+        );
+        let content = parse_edl_content(&edl_response(EDL_SHOW_FIXTURE)).expect("show");
+        assert_eq!(
+            (
+                content.total_valid,
+                content.total_ignored,
+                content.total_invalid
+            ),
+            (1, 0, 0)
+        );
+        assert_eq!(content.members, ["8.8.8.8"]);
+    }
+
+    #[test]
+    fn edl_error_fixture_surfaces_as_api_error() {
+        let error = edl_response(EDL_ERROR_FIXTURE)
+            .ensure_success("fw")
+            .expect_err("error envelope");
+        assert!(matches!(error, PanosMcpError::Api { code: 17, .. }));
+    }
+
+    fn edl_content(members: &[&str], total_valid: u64) -> EdlContent {
+        EdlContent {
+            total_valid,
+            total_ignored: 0,
+            total_invalid: 0,
+            members: members.iter().map(|member| (*member).to_owned()).collect(),
+        }
+    }
+
+    #[test]
+    fn edl_etag_matches_mecfeed_serve_vectors() {
+        let cases: [(&[&str], &str); 3] = [
+            (
+                &["8.8.8.8"],
+                "sha256-fcad3ca3c931e062c73989fa3b7ba2f5f02c581ab9e991ae32cb5f4547ade025",
+            ),
+            (
+                &[],
+                "sha256-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            ),
+            (
+                &["8.8.8.8", "1.1.1.1"],
+                "sha256-c7da927c2f061f217c2d92e778d12671dbe7269e7f0887aff975cdfe75b84ebf",
+            ),
+        ];
+        for (members, expected) in cases {
+            let content = edl_content(members, members.len() as u64);
+            assert_eq!(edl_content_etag(&content).as_deref(), Some(expected));
+        }
+    }
+
+    #[test]
+    fn edl_etag_is_none_when_member_count_disagrees_with_total_valid() {
+        assert_eq!(edl_content_etag(&edl_content(&["8.8.8.8"], 2)), None);
+    }
+
+    fn feed_config(entry_xml: &str) -> Option<EdlFeedConfig> {
+        let entry = ConfigEntry {
+            name: "feed".to_owned(),
+            xml: entry_xml.to_owned(),
+            digest: String::new(),
+        };
+        parse_edl_feed_config(&entry).expect("parse")
+    }
+
+    fn feed_entry(edl_type: &str, url: &str) -> String {
+        format!(
+            r#"<entry name="feed"><type><{edl_type}><url>{url}</url><recurring><five-minute/></recurring></{edl_type}></type></entry>"#
+        )
+    }
+
+    #[test]
+    fn edl_feed_url_matching() {
+        let kind =
+            |edl_type: &str, url: &str| feed_config(&feed_entry(edl_type, url)).map(|f| f.kind);
+        let base = "http://h/feeds/panos-edl";
+        assert_eq!(
+            kind("ip", &format!("{base}/address")),
+            Some(EdlFeedKind::Address)
+        );
+        assert_eq!(
+            kind("ip", &format!("{base}/prefix")),
+            Some(EdlFeedKind::Prefix)
+        );
+        assert_eq!(
+            kind("domain", &format!("{base}/domain")),
+            Some(EdlFeedKind::Domain)
+        );
+        // Kind/type mismatches and foreign URLs are ignored.
+        assert_eq!(kind("domain", &format!("{base}/address")), None);
+        assert_eq!(kind("ip", &format!("{base}/domain")), None);
+        assert_eq!(kind("ip", "http://192.168.1.206/blocklist.txt"), None);
+        assert_eq!(kind("url", &format!("{base}/address")), None);
+    }
+
+    #[test]
+    fn edl_feed_url_userinfo_is_stripped() {
+        let config = feed_config(&feed_entry(
+            "ip",
+            "https://u:p@h:8443/feeds/panos-edl/address",
+        ))
+        .expect("feed");
+        assert_eq!(config.url, "https://h:8443/feeds/panos-edl/address");
+    }
+
+    #[test]
+    fn edl_feed_url_query_and_fragment_are_stripped() {
+        let config = feed_config(&feed_entry(
+            "ip",
+            "https://h/feeds/panos-edl/address?token=x#y",
+        ))
+        .expect("feed");
+        assert_eq!(config.url, "https://h/feeds/panos-edl/address");
+    }
+
+    #[test]
+    fn edl_last_event_reads_time_and_opaque() {
+        let entry = ConfigEntry {
+            name: String::new(),
+            xml: "<entry><time_generated>2026/10/27 20:57:15</time_generated><opaque>EDL(mms-blocklist) No changes to list file</opaque></entry>".to_owned(),
+            digest: String::new(),
+        };
+        let event = parse_edl_last_event(&[entry])
+            .expect("event")
+            .expect("some");
+        assert_eq!(event.time, "2026/10/27 20:57:15");
+        assert_eq!(event.message, "EDL(mms-blocklist) No changes to list file");
+        assert_eq!(parse_edl_last_event(&[]).expect("none"), None);
+    }
 
     #[test]
     fn rejects_doctype_before_entity_processing() {

@@ -343,6 +343,44 @@ the job, candidate fingerprint, and live PAN-OS lock, remove the lock if
 required, then use the exact offline-resolution confirmation documented in
 `PHASE3_OPERATIONS.md`.
 
+## Subscribing to a mecfeedmcp feed
+
+Stage the external-list entry through the normal change-set flow
+(create, stage, approve, apply, commit). The token's mutation root must cover
+`/config/devices/entry[@name='localhost.localdomain']/vsys/entry[@name='vsys1']/external-list`.
+
+```xml
+<entry name="mecfeed-address">
+  <type>
+    <ip>
+      <url>https://SERVE_HOST:8443/feeds/panos-edl/address</url>
+      <certificate-profile>MECFEED-CA</certificate-profile>
+      <recurring><five-minute/></recurring>
+    </ip>
+  </type>
+</entry>
+```
+
+The feed kind is `address`, `prefix` (both EDL type `ip`) or `domain` (type
+`domain`). The certificate profile must trust the CA that signed
+mecfeed-serve's TLS certificate. PAN-OS offers client authentication (Basic:
+client name and password) only for an HTTPS source with a certificate profile.
+
+Do not stage `<auth>`. Change sets keep the element verbatim in server state
+and in `get_panos_change_set` output, so a staged password would reach the
+reviewer and the model. Set the Basic password once on the firewall (GUI or
+CLI) after the commit.
+
+Then `get_panos_feed_status` confirms the subscription (`feeds: []` means not
+subscribed). `content_etag` equals mecfeed-serve's ETag when the firewall holds
+the whole document. It is `null` when the member count differs from
+`total_valid`. It will not match serve's ETag when `total_ignored` or
+`total_invalid` is above 0, because the firewall dropped entries.
+`last_event` is the newest EDL system-log event; "EDL file was not updated at
+remote end" means serve answered 304 (the firewall already holds the current
+ETag). Only the inventory vsys is inspected. The reported `url` has any
+credentials, query and fragment removed.
+
 ## Egress filtering
 
 The packaged unit declares `IPAddressDeny` to block egress to cloud metadata

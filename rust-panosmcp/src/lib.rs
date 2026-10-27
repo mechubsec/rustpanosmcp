@@ -26,9 +26,9 @@ use rust_panosmcp_core::{
     tools::{
         ExecutePanosOpInput, GatherDeviceFactsInput, GetPanoramaPushStatusInput,
         GetPanosConfigInput, GetPanosContentStatusInput, GetPanosEntryDigestInput,
-        GetPanosHaStateInput, GetPanosLicenseInfoInput, GetPanosSoftwareStatusInput,
-        ListPanoramaDeviceGroupsInput, ListPanoramaTemplatesInput, ListPanosEntriesInput,
-        ListPanosRulebaseEntriesInput, PanosService, QueryPanosLogsInput,
+        GetPanosFeedStatusInput, GetPanosHaStateInput, GetPanosLicenseInfoInput,
+        GetPanosSoftwareStatusInput, ListPanoramaDeviceGroupsInput, ListPanoramaTemplatesInput,
+        ListPanosEntriesInput, ListPanosRulebaseEntriesInput, PanosService, QueryPanosLogsInput,
         TestPanosSecurityPolicyMatchInput,
     },
 };
@@ -1021,6 +1021,31 @@ impl PanosMcpServer {
         Self::to_call_result(
             service
                 .get_panos_content_status(input, caller.as_ref(), cancellation)
+                .await,
+        )
+    }
+
+    /// Read mecfeedmcp feed status.
+    #[tool(
+        name = "get_panos_feed_status",
+        description = "Read status of mecfeedmcp feeds (PAN-OS external dynamic lists) on an authorized device: URL, validity, entry counts, next refresh, last refresh event, and a recomputed content ETag"
+    )]
+    async fn get_panos_feed_status(
+        &self,
+        Parameters(input): Parameters<GetPanosFeedStatusInput>,
+        extensions: Extensions,
+        cancellation: CancellationToken,
+    ) -> std::result::Result<CallToolResult, rmcp::ErrorData> {
+        if let Some(denial) =
+            Self::authorize(&extensions, "get_panos_feed_status", Some(&input.device))
+        {
+            return Ok(denial);
+        }
+        let service = self.runtime.snapshot().service.clone();
+        let caller = Self::caller(&extensions);
+        Self::to_call_result(
+            service
+                .get_panos_feed_status(input, caller.as_ref(), cancellation)
                 .await,
         )
     }

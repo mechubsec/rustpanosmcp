@@ -41,6 +41,7 @@ pub const KNOWN_TOOLS: &[&str] = &[
     "get_panos_config",
     "get_panos_content_status",
     "get_panos_entry_digest",
+    "get_panos_feed_status",
     "get_panos_ha_state",
     "get_panos_license_info",
     "get_panos_operation",
