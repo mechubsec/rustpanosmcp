@@ -231,6 +231,33 @@ impl PanosClient {
         .await
     }
 
+    /// Execute an external-list `<request>` command for one named EDL.
+    ///
+    /// This is the one parameterised `<request>` path, which is why it is not
+    /// [`fixed_op`](Self::fixed_op): its only variable parts are two enums
+    /// and `name`, and `name` must pass [`validate_edl_name`] before it is
+    /// interpolated, so the charset excludes every XML metacharacter and no
+    /// escaping is needed.
+    pub(crate) async fn edl_op(
+        &self,
+        verb: EdlVerb,
+        edl_type: EdlType,
+        name: &str,
+        cancellation: CancellationToken,
+    ) -> Result<PanosResponse> {
+        validate_edl_name(name)?;
+        let command = format!(
+            "<request><system><external-list><{verb}><type><{kind}><name>{name}</name></{kind}></type></{verb}></external-list></system></request>",
+            verb = verb.tag(),
+            kind = edl_type.tag(),
+        );
+        self.post(
+            vec![("type", "op".to_owned()), ("cmd", command)],
+            cancellation,
+        )
+        .await
+    }
+
     /// Poll a PAN-OS `type=log` job with cancellation and bounded backoff.
     ///
     /// A log job's terminal state is nested under `<result><job><status>...`
@@ -662,4 +689,59 @@ fn sanitized_reqwest_reason(error: &reqwest::Error) -> &'static str {
     } else {
         "HTTP client failure"
     }
+}
+
+/// External-list `<request>` verb.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum EdlVerb {
+    /// `stats`: validity and next refresh.
+    Stats,
+    /// `show`: entry counts and members.
+    Show,
+}
+
+impl EdlVerb {
+    fn tag(self) -> &'static str {
+        match self {
+            Self::Stats => "stats",
+            Self::Show => "show",
+        }
+    }
+}
+
+/// External-list type element accepted by [`PanosClient::edl_op`].
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum EdlType {
+    /// `ip` list.
+    Ip,
+    /// `domain` list.
+    Domain,
+}
+
+impl EdlType {
+    fn tag(self) -> &'static str {
+        match self {
+            Self::Ip => "ip",
+            Self::Domain => "domain",
+        }
+    }
+}
+
+/// Validate an EDL object name: 1-63 characters of `[A-Za-z0-9 ._-]`.
+///
+/// The PAN-OS object-name charset. It excludes every XML and log-filter
+/// metacharacter (quotes, brackets, parentheses, `<`, `&`), so a name that
+/// passes can be interpolated into an op command or a log query unescaped.
+pub(crate) fn validate_edl_name(name: &str) -> Result<()> {
+    let valid = (1..=63).contains(&name.len())
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b' ' | b'.' | b'_' | b'-'));
+    if valid {
+        return Ok(());
+    }
+    Err(PanosMcpError::Policy {
+        field: "external-list name",
+        reason: "value must be 1-63 characters of A-Z a-z 0-9 space . _ -".to_owned(),
+    })
 }

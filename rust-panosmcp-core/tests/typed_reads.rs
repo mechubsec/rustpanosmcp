@@ -12,9 +12,10 @@ use rust_panosmcp_core::{
     PanosMcpError,
     inventory::{Environment, Inventory},
     tools::{
-        ConfigSource, GetPanosContentStatusInput, GetPanosHaStateInput, GetPanosLicenseInfoInput,
-        GetPanosSoftwareStatusInput, IpProtocol, ListPanosRulebaseEntriesInput, PanosLogType,
-        PanosService, QueryPanosLogsInput, RulebaseKind, TestPanosSecurityPolicyMatchInput,
+        ConfigSource, GetPanosContentStatusInput, GetPanosFeedStatusInput, GetPanosHaStateInput,
+        GetPanosLicenseInfoInput, GetPanosSoftwareStatusInput, IpProtocol,
+        ListPanosRulebaseEntriesInput, PanosLogType, PanosService, QueryPanosLogsInput,
+        RulebaseKind, TestPanosSecurityPolicyMatchInput,
     },
 };
 use std::{
@@ -84,6 +85,32 @@ async fn api(
             r#"<result><sw-updates><versions><entry><version>11.0.0</version><filename>PanOS_vm-11.0.0</filename><released-on>2025/06/01</released-on><downloaded>yes</downloaded><current>yes</current><latest>yes</latest></entry></versions></sw-updates></result>"#,
         );
     }
+    if command.contains("<request><system><external-list><stats>") {
+        return success(
+            "<result total-count=\"1\" count=\"1\"><external-list><vsys>vsys1</vsys><name>mms-blocklist</name><next-update>Tue Oct 27 21:02:16 2026\n</next-update><source>http://192.168.1.206/blocklist.txt</source><referenced>Yes</referenced><valid>Yes</valid><auth-valid>Yes</auth-valid></external-list></result>",
+        );
+    }
+    if command.contains("<request><system><external-list><show>") {
+        return success(
+            "<result total-count=\"1\" count=\"1\"><external-list><vsys>(null)</vsys><name>mms-blocklist</name><total-valid>1</total-valid><total-ignored>0</total-ignored><total-invalid>0</total-invalid><valid-members><member>8.8.8.8</member></valid-members></external-list></result>",
+        );
+    }
+    if request_type == "log"
+        && action.is_empty()
+        && form
+            .get("query")
+            .is_some_and(|query| query.contains("EDL(mms-blocklist)"))
+    {
+        return success("<result><job>557</job></result>");
+    }
+    if request_type == "log"
+        && action == "get"
+        && form.get("job-id").map(String::as_str) == Some("557")
+    {
+        return success(
+            "<result><job><status>FIN</status></job><log><logs><entry><time_generated>2026/10/27 20:57:15</time_generated><opaque>EDL(mms-blocklist) No changes to list file</opaque></entry></logs></log></result>",
+        );
+    }
     if command.contains("<test><security-policy-match>") {
         if command.contains("203.0.113.99") {
             // Deliberately zero matches for one probe address.
@@ -144,6 +171,11 @@ async fn api(
     }
     if request_type == "config" && (action == "show" || action == "get") {
         let xpath = form.get("xpath").cloned().unwrap_or_default();
+        if xpath.ends_with("/vsys/entry[@name='vsys1']/external-list") {
+            return success(
+                r#"<result><external-list><entry name="mms-blocklist"><type><ip><url>https://u:p@mec:8443/feeds/panos-edl/address</url><recurring><five-minute/></recurring></ip></type></entry><entry name="other"><type><ip><url>http://x/list.txt</url></ip></type></entry></external-list></result>"#,
+            );
+        }
         if xpath.contains("vsys-with-secret") {
             // Rule/object description free text carrying a master-key blob
             // and a crypt-style hash, the shapes `list_panos_rulebase_entries`
@@ -756,4 +788,38 @@ async fn log_query_finishes_an_abandoned_job_on_cancellation() {
             .any(|(kind, action)| kind == "log" && action == "finish"),
         "abandoned log job was not finished: {requests:?}"
     );
+}
+
+#[tokio::test]
+async fn feed_status_reports_subscribed_feed_with_etag_and_last_event() {
+    let (service, state) = fixture().await;
+    let out = service
+        .get_panos_feed_status(
+            GetPanosFeedStatusInput {
+                device: "test-fw".to_owned(),
+            },
+            None,
+            CancellationToken::new(),
+        )
+        .await
+        .expect("feed status");
+
+    assert_eq!(out.feeds.len(), 1, "the foreign EDL is ignored");
+    let feed = &out.feeds[0];
+    assert_eq!(feed.name, "mms-blocklist");
+    assert_eq!(feed.url, "https://mec:8443/feeds/panos-edl/address");
+    assert!(feed.valid && feed.auth_valid);
+    assert_eq!(feed.next_update, "Tue Oct 27 21:02:16 2026");
+    assert_eq!(feed.total_valid, 1);
+    assert_eq!(
+        feed.content_etag.as_deref(),
+        Some("sha256-fcad3ca3c931e062c73989fa3b7ba2f5f02c581ab9e991ae32cb5f4547ade025")
+    );
+    let event = feed.last_event.as_ref().expect("last event");
+    assert_eq!(event.time, "2026/10/27 20:57:15");
+    assert_eq!(event.message, "EDL(mms-blocklist) No changes to list file");
+
+    let commands = state.commands.lock().expect("commands");
+    assert!(commands.contains(&"<request><system><external-list><stats><type><ip><name>mms-blocklist</name></ip></type></stats></external-list></system></request>".to_owned()));
+    assert!(commands.contains(&"<request><system><external-list><show><type><ip><name>mms-blocklist</name></ip></type></show></external-list></system></request>".to_owned()));
 }
