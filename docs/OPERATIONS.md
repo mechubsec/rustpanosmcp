@@ -373,8 +373,9 @@ CLI) after the commit.
 
 Then `get_panos_feed_status` confirms the subscription (`feeds: []` means not
 subscribed). `content_etag` equals mecfeed-serve's ETag when the firewall holds
-the whole document. If `total_ignored` or `total_invalid` is above 0, or the
-member count does not match `total_valid`, it is `null` and will not match.
+the whole document. It is `null` when the member count differs from
+`total_valid`. It will not match serve's ETag when `total_ignored` or
+`total_invalid` is above 0, because the firewall dropped entries.
 `last_event` is the newest EDL system-log event; "EDL file was not updated at
 remote end" means serve answered 304 (the firewall already holds the current
 ETag). Only the inventory vsys is inspected.
