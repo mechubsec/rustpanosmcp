@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-27
+
+### Added
+
+- `get_panos_feed_status`: read-only status of mecfeedmcp feeds (PAN-OS
+  external dynamic lists) per device — feed URL (credentials, query and
+  fragment removed), validity, entry counts, next refresh, the last EDL
+  refresh event, and a content ETag recomputed the way mecfeed-serve computes
+  it. Subscribing is documented in `docs/OPERATIONS.md` and uses the existing
+  change-set flow. (#253)
+
+### Changed
+
+- The runtime image is pinned to the registry's current
+  `gcr.io/distroless/cc-debian13:nonroot` digest. (#267)
+- Packaging supports a skip-build path whose `BUILD-INFO` says so. (#264)
+- Dependency updates. (#259, #260, #261, #263, #266)
+
+### Security
+
+- Bumped `rustls-webpki`, `webpki-root-certs` and `ctutils`, closing
+  RUSTSEC-2026-0382, RUSTSEC-2026-0383 and RUSTSEC-2026-0385. (#265)
+
 ## [0.16.2] - 2026-10-15
 
 ### Added

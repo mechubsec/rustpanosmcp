@@ -135,8 +135,8 @@ Both are shown below. The second is what the examples here were verified with.
 first:
 
 ```bash
-docker pull ghcr.io/mechubsec/rustpanosmcp:0.16.2
-image=$(docker inspect ghcr.io/mechubsec/rustpanosmcp:0.16.2 \
+docker pull ghcr.io/mechubsec/rustpanosmcp:0.17.0
+image=$(docker inspect ghcr.io/mechubsec/rustpanosmcp:0.17.0 \
     --format '{{index .RepoDigests 0}}')
 ```
 

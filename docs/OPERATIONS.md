@@ -11,9 +11,9 @@ checksum before extracting and compare the recorded Git commit with the release
 you approved:
 
 ```bash
-sha256sum --check rust-panosmcp-v0.16.2-x86_64-unknown-linux-gnu.tar.gz.sha256
-tar -xzf rust-panosmcp-v0.16.2-x86_64-unknown-linux-gnu.tar.gz
-cat rust-panosmcp-v0.16.2/BUILD-INFO
+sha256sum --check rust-panosmcp-v0.17.0-x86_64-unknown-linux-gnu.tar.gz.sha256
+tar -xzf rust-panosmcp-v0.17.0-x86_64-unknown-linux-gnu.tar.gz
+cat rust-panosmcp-v0.17.0/BUILD-INFO
 ```
 
 `BUILD-INFO` is `key=value` lines: `version`, `git_commit` (the commit that
