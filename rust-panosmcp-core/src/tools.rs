@@ -1114,9 +1114,15 @@ impl PanosService {
             );
             self.check_xpath_policy(&input.device, &xpath)?;
 
-            let (bytes, _truncated) = client
+            let (bytes, truncated) = client
                 .configuration_entries(false, &xpath, cancellation.clone())
                 .await?;
+            // A cut response would read as fewer (or no) feeds; refuse instead.
+            if truncated {
+                return Err(PanosMcpError::Xml(
+                    "external-list config response was truncated".to_owned(),
+                ));
+            }
             let scan = scan_config_entries(&bytes, 0, usize::MAX, LIST_CONTAINER_ENTRY_DEPTH)?;
             match ensure_scan_success(&input.device, &bytes, &scan) {
                 Ok(()) => {}

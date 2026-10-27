@@ -921,9 +921,11 @@ pub fn parse_edl_feed_config(entry: &ConfigEntry) -> Result<Option<EdlFeedConfig
         ("domain", Some((_, "domain"))) => EdlFeedKind::Domain,
         _ => return Ok(None),
     };
-    // Credentials in the URL must never reach tool output.
+    // Credentials, query and fragment in the URL must never reach tool output.
     let _ = parsed.set_username("");
     let _ = parsed.set_password(None);
+    parsed.set_query(None);
+    parsed.set_fragment(None);
     Ok(Some(EdlFeedConfig {
         name: entry.name.clone(),
         kind,
@@ -2136,6 +2138,16 @@ mod tests {
         ))
         .expect("feed");
         assert_eq!(config.url, "https://h:8443/feeds/panos-edl/address");
+    }
+
+    #[test]
+    fn edl_feed_url_query_and_fragment_are_stripped() {
+        let config = feed_config(&feed_entry(
+            "ip",
+            "https://h/feeds/panos-edl/address?token=x#y",
+        ))
+        .expect("feed");
+        assert_eq!(config.url, "https://h/feeds/panos-edl/address");
     }
 
     #[test]

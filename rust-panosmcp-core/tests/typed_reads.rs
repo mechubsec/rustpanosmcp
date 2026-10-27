@@ -41,6 +41,8 @@ struct MockState {
     /// Every `cmd` field a request carried, in order (empty string when the
     /// request had none, e.g. a plain `type=log` submission).
     commands: Mutex<Vec<String>>,
+    /// Answer the external-list config read with PAN-OS's missing-node error.
+    missing_edl_node: std::sync::atomic::AtomicBool,
 }
 
 fn success(body: &str) -> String {
@@ -171,6 +173,13 @@ async fn api(
     }
     if request_type == "config" && (action == "show" || action == "get") {
         let xpath = form.get("xpath").cloned().unwrap_or_default();
+        if xpath.ends_with("/external-list")
+            && state
+                .missing_edl_node
+                .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return r#"<response status="error"><msg>No such node</msg></response>"#.to_owned();
+        }
         if xpath.ends_with("/vsys/entry[@name='vsys1']/external-list") {
             return success(
                 r#"<result><external-list><entry name="mms-blocklist"><type><ip><url>https://u:p@mec:8443/feeds/panos-edl/address</url><recurring><five-minute/></recurring></ip></type></entry><entry name="other"><type><ip><url>http://x/list.txt</url></ip></type></entry></external-list></result>"#,
@@ -822,4 +831,23 @@ async fn feed_status_reports_subscribed_feed_with_etag_and_last_event() {
     let commands = state.commands.lock().expect("commands");
     assert!(commands.contains(&"<request><system><external-list><stats><type><ip><name>mms-blocklist</name></ip></type></stats></external-list></system></request>".to_owned()));
     assert!(commands.contains(&"<request><system><external-list><show><type><ip><name>mms-blocklist</name></ip></type></show></external-list></system></request>".to_owned()));
+}
+
+#[tokio::test]
+async fn feed_status_reports_no_feeds_when_the_external_list_node_is_missing() {
+    let (service, state) = fixture().await;
+    state
+        .missing_edl_node
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let out = service
+        .get_panos_feed_status(
+            GetPanosFeedStatusInput {
+                device: "test-fw".to_owned(),
+            },
+            None,
+            CancellationToken::new(),
+        )
+        .await
+        .expect("missing node is not an error");
+    assert!(out.feeds.is_empty());
 }

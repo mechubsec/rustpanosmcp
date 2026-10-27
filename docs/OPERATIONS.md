@@ -378,7 +378,8 @@ the whole document. It is `null` when the member count differs from
 `total_invalid` is above 0, because the firewall dropped entries.
 `last_event` is the newest EDL system-log event; "EDL file was not updated at
 remote end" means serve answered 304 (the firewall already holds the current
-ETag). Only the inventory vsys is inspected.
+ETag). Only the inventory vsys is inspected. The reported `url` has any
+credentials, query and fragment removed.
 
 ## Egress filtering
 
