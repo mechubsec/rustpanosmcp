@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-11-10
+
+Security release: the 0.17.0 image's runtime base carries a zlib flagged HIGH,
+and its rmcp is covered by RUSTSEC-2026-0462.
+
+### Changed
+
+- Dependency updates: rustix 1.1.6 and uuid 1.29.0 (#276). Reusable release
+  workflows and the packaging conformance action pinned to mecmcp v0.30.1
+  (#271).
+
+### Security
+
+- The image's `distroless/cc-debian13` runtime base moves to `cc66d22`, which
+  carries zlib `1.3.1-1+deb13u1` for CVE-2026-76844 and CVE-2026-85091. The
+  0.17.0 image's base (`3ee0029`) is affected. (#273, #277)
+- rmcp 3.9.0 for RUSTSEC-2026-0462. The advisory is in rmcp's Streamable HTTP
+  client, which this server uses only in its tests. (#274)
+
 ## [0.17.0] - 2026-10-27
 
 ### Added
