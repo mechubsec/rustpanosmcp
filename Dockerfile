@@ -24,11 +24,11 @@ COPY rust-panosmcp-core/src rust-panosmcp-core/src
 
 RUN cargo build --release --locked --bin rust-panosmcp
 
-# Runtime base digest verified against registry on 2026-08-24.
+# Runtime base digest verified against registry on 2026-11-10.
 # Digests have no version ordering and must be validated by resolving the tag
 # against the registry (docker pull gcr.io/distroless/cc-debian13:nonroot),
 # never by comparing hashes or by matching sibling repos.
-FROM gcr.io/distroless/cc-debian13:nonroot@sha256:08476c244888bfb425bae1ae4dd7c17f093e972aab8426883d97f3c6f280f7c1
+FROM gcr.io/distroless/cc-debian13:nonroot@sha256:cc66d222f0a7ec996b78a99fe76a969bc80b539a5016ad866c14d1949bc6d0ab
 
 ARG VERSION=0.2.0
 ARG VCS_REF=unknown
