@@ -21,16 +21,14 @@ jobs:
       # caller, never widened, so this job must grant them itself -- see
       # mecmcp's docs/RELEASE-WORKFLOWS.md.
       id-token: write
-    uses: mechubsec/mecmcp/.github/workflows/reusable-release-image.yml@8557155ed1ecd24e7ae25948d70485f0fc8c8451 # v0.30.1
+    uses: mechubsec/mecmcp/.github/workflows/reusable-release-image.yml@ab6786faca282cfbfffed5668f6a15929ce26bef # v0.33.1
     with:
       # GHCR requires a lowercase image path; github.repository is already lowercase.
       image: ghcr.io/${{ github.repository }}
       # Dual-push (mecmcp MEC-2110). Docker Hub org is `mechub`.
-      # platforms stays linux/amd64: Docker Hub images are amd64-only.
       dockerhub-image: docker.io/mechub/rustpanosmcp
       description: 'PAN-OS MCP server'
       version: ${{ github.event.inputs.version }}
-      platforms: linux/amd64
     secrets:
       dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
       dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
