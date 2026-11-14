@@ -28,7 +28,7 @@ RUN cargo build --release --locked --bin rust-panosmcp
 # Digests have no version ordering and must be validated by resolving the tag
 # against the registry (docker pull gcr.io/distroless/cc-debian13:nonroot),
 # never by comparing hashes or by matching sibling repos.
-FROM gcr.io/distroless/cc-debian13:nonroot@sha256:cc66d222f0a7ec996b78a99fe76a969bc80b539a5016ad866c14d1949bc6d0ab
+FROM gcr.io/distroless/cc-debian13:nonroot@sha256:cb87acc574abe719b6e5c547384defa2f7b1f24af9605d3f618cf852495d8be2
 
 ARG VERSION=0.2.0
 ARG VCS_REF=unknown
