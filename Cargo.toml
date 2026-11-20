@@ -18,7 +18,7 @@ authors = ["fastrevmd-lab"]
 [workspace.dependencies]
 arc-swap = "1"
 axum = "0.8"
-axum-server = { version = "0.8", default-features = false, features = ["tls-rustls-no-provider"] }
+axum-server = { version = "0.9", default-features = false, features = ["tls-rustls-no-provider"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 clap = { version = "4", features = ["derive"] }
 fastrand = "2"
