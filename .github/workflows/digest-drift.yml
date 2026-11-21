@@ -23,21 +23,24 @@ jobs:
         id: drift
         run: |
           set -euo pipefail
-          line=$(grep -m1 '^FROM gcr.io/distroless/cc-debian13' Dockerfile)
+          # The last distroless FROM is the runtime; the first is only the libgcc donor.
+          line=$(grep '^FROM gcr.io/distroless/' Dockerfile | tail -1)
+          repo=$(printf '%s' "$line" | sed -n 's|^FROM gcr.io/distroless/\([^:@]*\).*|\1|p')
           pinned=$(printf '%s' "$line" | sed -n 's/.*@\(sha256:[0-9a-f]*\).*/\1/p')
-          tag=$(printf '%s' "$line" | sed -n 's|^FROM gcr.io/distroless/cc-debian13:\([^@]*\)@.*|\1|p')
-          [ -n "$pinned" ] && [ -n "$tag" ] || { echo "could not parse Dockerfile FROM line"; exit 1; }
+          tag=$(printf '%s' "$line" | sed -n 's|^FROM gcr.io/distroless/[^:]*:\([^@]*\)@.*|\1|p')
+          [ -n "$pinned" ] && [ -n "$tag" ] && [ -n "$repo" ] || { echo "could not parse Dockerfile FROM line"; exit 1; }
 
-          token=$(curl -sf "https://gcr.io/v2/token?scope=repository:distroless/cc-debian13:pull&service=gcr.io" \
+          token=$(curl -sf "https://gcr.io/v2/token?scope=repository:distroless/${repo}:pull&service=gcr.io" \
             | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
           current=$(curl -sfI -H "Authorization: Bearer $token" \
             -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json" \
-            "https://gcr.io/v2/distroless/cc-debian13/manifests/$tag" \
+            "https://gcr.io/v2/distroless/${repo}/manifests/$tag" \
             | tr -d '\r' | sed -n 's/^docker-content-digest: //Ip')
           [ -n "$current" ] || { echo "registry did not return a digest"; exit 1; }
 
-          echo "tag=$tag"; echo "pinned=$pinned"; echo "current=$current"
+          echo "repo=$repo tag=$tag"; echo "pinned=$pinned"; echo "current=$current"
           {
+            echo "repo=$repo"
             echo "tag=$tag"
             echo "pinned=$pinned"
             echo "current=$current"
@@ -48,6 +51,7 @@ jobs:
         if: steps.drift.outputs.drifted == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ steps.drift.outputs.repo }}
           TAG: ${{ steps.drift.outputs.tag }}
           PINNED: ${{ steps.drift.outputs.pinned }}
           CURRENT: ${{ steps.drift.outputs.current }}
@@ -55,7 +59,7 @@ jobs:
           set -euo pipefail
           title="Pinned distroless digest has drifted from the registry"
           body=$(printf '%s\n' \
-            "\`gcr.io/distroless/cc-debian13:$TAG\` no longer resolves to the pinned digest." \
+            "\`gcr.io/distroless/$REPO:$TAG\` no longer resolves to the pinned digest." \
             "" \
             "| | digest |" \
             "|---|---|" \

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The image runs on `distroless/base-nossl-debian13` (libgcc_s staged from the
+  pinned cc image), dropping libssl3t64 and its unfixed CVE-2026-124709. The
+  binary is rustls-only.
 - Container images are published for `linux/amd64` and `linux/arm64`, so Apple
   Silicon pulls a native image instead of failing with `no matching manifest`
   (mechubsec/rustjunosmcp#648). Each platform builds on its own native runner.

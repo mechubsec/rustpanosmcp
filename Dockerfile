@@ -8,6 +8,10 @@
 # so a digest-only Dependabot refresh moves the compiler across a point
 # release while the CI sync check still reports a match. Digest resolved from
 # the registry 2026-08-24.
+# Source of libgcc-s1 only; the runtime is base-nossl, which lacks it. Keep it
+# ahead of the builder so the runtime stays the last FROM.
+FROM gcr.io/distroless/cc-debian13:nonroot@sha256:cb87acc574abe719b6e5c547384defa2f7b1f24af9605d3f618cf852495d8be2 AS libgcc
+
 FROM rust:1.100.0-slim-bookworm@sha256:7c7d4eb4d05b7781187a327809466cfddf29753f6defdc3d19a0e291951b7a37 AS builder
 
 WORKDIR /src
@@ -24,11 +28,25 @@ COPY rust-panosmcp-core/src rust-panosmcp-core/src
 
 RUN cargo build --release --locked --bin rust-panosmcp
 
-# Runtime base digest verified against registry on 2026-11-10.
+# libgcc_s.so.1 is the one library the binary needs beyond glibc, and
+# base-nossl does not ship it. Stage it with its dpkg records (status.d) so
+# Trivy and the SBOM still see libgcc-s1 and gcc-14-base. The multiarch
+# directory comes from the builder's own triplet (x86_64 or aarch64).
+COPY --from=libgcc / /cc/
+RUN triplet="$(gcc -dumpmachine | sed 's/-pc-/-/')" \
+    && install -d "/stage-libgcc/usr/lib/${triplet}" /stage-libgcc/var/lib/dpkg/status.d \
+    && cp -a "/cc/usr/lib/${triplet}/libgcc_s.so.1" "/stage-libgcc/usr/lib/${triplet}/" \
+    && cp -a /cc/var/lib/dpkg/status.d/libgcc-s1 /cc/var/lib/dpkg/status.d/libgcc-s1.md5sums \
+        /cc/var/lib/dpkg/status.d/gcc-14-base /cc/var/lib/dpkg/status.d/gcc-14-base.md5sums \
+        /stage-libgcc/var/lib/dpkg/status.d/
+
+# Runtime base: distroless base-nossl (no libssl3t64/libcrypto: the binary is
+# rustls-only, and libssl3t64 carries unfixed CVE-2026-124709). Digest is the
+# multi-arch index, verified against the registry on 2026-11-21.
 # Digests have no version ordering and must be validated by resolving the tag
-# against the registry (docker pull gcr.io/distroless/cc-debian13:nonroot),
+# against the registry (docker pull gcr.io/distroless/base-nossl-debian13:nonroot),
 # never by comparing hashes or by matching sibling repos.
-FROM gcr.io/distroless/cc-debian13:nonroot@sha256:cb87acc574abe719b6e5c547384defa2f7b1f24af9605d3f618cf852495d8be2
+FROM gcr.io/distroless/base-nossl-debian13:nonroot@sha256:89815d620ac01d8de13cdaf04d19ed874447ca2296d4985b14b818f6e5e47854
 
 ARG VERSION=0.2.0
 ARG VCS_REF=unknown
@@ -41,6 +59,7 @@ LABEL org.opencontainers.image.title="rust-panosmcp" \
 # Official MCP Registry ownership check: must equal server.json "name".
 LABEL io.modelcontextprotocol.server.name="io.github.mechubsec/rustpanosmcp"
 
+COPY --from=builder /stage-libgcc/ /
 COPY --from=builder --chown=nonroot:nonroot /src/target/release/rust-panosmcp /usr/local/bin/rust-panosmcp
 
 ENV RUST_LOG=info
