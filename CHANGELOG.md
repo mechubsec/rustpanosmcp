@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Moved the `mecmcp-*` crates from `v0.27.0` to `v0.34.0` and axum-server
+  from 0.8 to 0.9, so the graph resolves one axum-server (mecmcp 0.34 uses
+  0.9). The HTTP caller context is now built with mecmcp's
+  `CallerCtx::from(&TokenEntry)`: a token carrying `device_selectors` addresses
+  no devices here (no device attributes are supplied) instead of being granted
+  its broad `devices` scope, and a token with a provider but no actor type is
+  an agent, as in mecmcp. Change sets record `owner_verified: false`.
+  **Upgrade note:** mecmcp 0.29 reserves the `oauth:` token-name prefix, and a
+  `tokens.json` containing such a name fails to load as a whole. Rename any
+  such token (`token revoke` then `token add`) before deploying; change sets
+  owned by a renamed token must be completed or cancelled first. Change-set
+  state written once an OAuth caller exists cannot be read by older binaries
+  (panos has no OAuth mode, so this does not arise here).
 - The image runs on `distroless/base-nossl-debian13` (libgcc_s staged from the
   pinned cc image), dropping libssl3t64 and its unfixed CVE-2026-124709. The
   binary is rustls-only.
