@@ -612,6 +612,9 @@ impl PanosService {
                 // wired in), so there is no owner OIDC subject to record.
                 // `None` preserves the pre-MEC-994 legacy approval path.
                 owner_subject: None,
+                // Not run in mecmcp's require-verified-proposer mode (needs
+                // `create_change_set_as`), so the proposer is never IdP-verified.
+                owner_verified: false,
                 approver: None,
                 approval: None,
                 // From the coordinator, not the constant: an operator who sets
@@ -2777,6 +2780,7 @@ mod tests {
             request_id: uuid::Uuid::nil(),
             token_verified_fields: mecmcp_audit::TokenVerifiedFields::none(),
             verified_approver: None,
+            verified_proposer: None,
             approver: None,
             change_set_id: None,
         };

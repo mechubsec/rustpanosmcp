@@ -412,6 +412,10 @@ async fn change_set_requires_exact_independent_approval_and_applies_as_one_opera
         model_id: None,
         session_id: None,
         request_id: uuid::Uuid::new_v4(),
+        verified_proposer: None,
+        oauth: None,
+        token_created_at: None,
+        token_expires_at: None,
     };
     let approved = fixture
         .service
@@ -796,6 +800,10 @@ async fn approve_change_set_by_agent_actor_is_refused() {
         model_id: None,
         session_id: None,
         request_id: uuid::Uuid::new_v4(),
+        verified_proposer: None,
+        oauth: None,
+        token_created_at: None,
+        token_expires_at: None,
     };
     let result = fixture
         .service
@@ -1092,6 +1100,10 @@ async fn commit_candidate_without_change_set_is_refused_without_the_flag() {
         model_id: None,
         session_id: None,
         request_id: uuid::Uuid::new_v4(),
+        verified_proposer: None,
+        oauth: None,
+        token_created_at: None,
+        token_expires_at: None,
     };
 
     // stdio: no caller context at all.

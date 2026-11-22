@@ -608,6 +608,10 @@ async fn all_tools_emit_audit_events() {
         model_id: None,
         session_id: None,
         request_id: uuid::Uuid::new_v4(),
+        verified_proposer: None,
+        oauth: None,
+        token_created_at: None,
+        token_expires_at: None,
     };
     let _ = service
         .approve_change_set(

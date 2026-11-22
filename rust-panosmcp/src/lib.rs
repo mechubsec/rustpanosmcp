@@ -286,22 +286,7 @@ impl PanosMcpServer {
                     .extensions
                     .get::<mecmcp_auth::CallerCtx<rust_panosmcp_auth::MutationGrant>>()
             })
-            .map(|ctx| rust_panosmcp_auth::CallerContext {
-                token_name: ctx.token_name.clone(),
-                devices: ctx.devices.clone(),
-                tools: ctx.tools.clone(),
-                grant: ctx.grant.clone(),
-                provider: ctx.provider.clone(),
-                provider_tier: ctx.provider_tier,
-                on_behalf_of: ctx.on_behalf_of.clone(),
-                actor_type: ctx.actor_type,
-                oidc_subject: ctx.oidc_subject.clone(),
-                verified_approver: ctx.verified_approver.clone(),
-                client_name: ctx.client_name,
-                model_id: ctx.model_id,
-                session_id: ctx.session_id.clone(),
-                request_id: ctx.request_id,
-            })
+            .cloned()
     }
 
     fn authorize(

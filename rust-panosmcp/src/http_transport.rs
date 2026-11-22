@@ -118,26 +118,12 @@ pub fn build_router(
             // The boundary inserts whatever grant type this closure produces,
             // so the context is built over `MutationGrant` and carries the
             // entry's grant. Dropping it here left every change-set write
-            // refused as ungranted (#116).
-            Some(CallerCtx::<MutationGrant> {
-                token_name: entry.name.clone(),
-                devices: entry.devices.clone(),
-                tools: entry.tools.clone(),
-                grant: entry.grant.clone(),
-                provider: entry.provider.clone(),
-                provider_tier: entry.provider_tier,
-                on_behalf_of: entry.on_behalf_of.clone(),
-                actor_type: entry.actor_type,
-                oidc_subject: entry.oidc_subject.clone(),
-                // This server does not implement MEC-994 W3's
-                // `bind_approver` bearer preflight, so no request ever
-                // carries a verified approver assertion yet.
-                verified_approver: None,
-                client_name: None,
-                model_id: None,
-                session_id: None,
-                request_id: uuid::Uuid::new_v4(),
-            })
+            // refused as ungranted (#116). `From<&TokenEntry>` is mecmcp's own
+            // construction: it fails closed on `device_selectors` (this server
+            // has no device attributes, so such a token addresses no devices)
+            // and fills the whoami fields. No `bind_approver` preflight is
+            // wired, so no request carries a verified approver assertion.
+            Some(CallerCtx::<MutationGrant>::from(entry))
         });
         let preflight = ToolScopePreflight::new(
             MUTATION_TOOLS,
@@ -303,6 +289,7 @@ mod tests {
             on_behalf_of: None,
             actor_type: mecmcp_auth::ActorType::Unknown,
             oidc_subject: None,
+            device_selectors: None,
         }])
         .expect("store");
         assert_eq!(

@@ -119,7 +119,7 @@ pub fn run(action: TokenAction, known_devices: &[String]) -> Result<(), TokenCom
                     output,
                     "{}\t{}\t{}\t{}\t{}\t{}",
                     entry.name,
-                    entry.devices.summary(),
+                    devices_column(entry),
                     entry.tools.summary(),
                     mutation,
                     entry.created_at.timestamp(),
@@ -198,6 +198,15 @@ pub fn run(action: TokenAction, known_devices: &[String]) -> Result<(), TokenCom
         }
     }
     Ok(())
+}
+
+/// DEVICES column: the scope, plus any `device_selectors`, which this server
+/// cannot resolve, so a selector token addresses no devices at request time.
+fn devices_column(entry: &rust_panosmcp_auth::TokenEntry) -> String {
+    match &entry.device_selectors {
+        Some(selectors) => format!("{} [{}]", entry.devices.summary(), selectors.join(",")),
+        None => entry.devices.summary(),
+    }
 }
 
 fn parse_mutation_grant(
@@ -310,6 +319,28 @@ fn signal_reload(pid: Option<i32>) -> Result<(), TokenCommandError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn devices_column_shows_selectors() {
+        let mut entry = rust_panosmcp_auth::TokenEntry {
+            name: "t".to_owned(),
+            digest: mecmcp_auth::TokenDigest::from_secret("s"),
+            devices: ScopeSet::Wildcard,
+            tools: ScopeSet::Wildcard,
+            created_at: chrono::DateTime::from_timestamp(1, 0).expect("timestamp"),
+            expires_at: None,
+            grant: None,
+            provider: None,
+            provider_tier: None,
+            on_behalf_of: None,
+            actor_type: mecmcp_auth::ActorType::Unknown,
+            oidc_subject: None,
+            device_selectors: None,
+        };
+        assert_eq!(devices_column(&entry), "*");
+        entry.device_selectors = Some(vec!["site=lab-*".to_owned()]);
+        assert_eq!(devices_column(&entry), "* [site=lab-*]");
+    }
 
     #[test]
     fn wildcard_is_exclusive() {
